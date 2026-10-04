@@ -2,16 +2,19 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build cal-fa",
+            "label": "build jala",
             "type": "shell",
             "command": "g++",
             "args": [
                 "-std=c++17",
                 "-O2",
                 "-g",
+                "-Wall",
+                "-Wextra",
                 "-o",
-                "cal-fa",
-                "cal-fa.cpp"
+                "jala",
+                "jala.cpp",
+                "-lboost_date_time"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -20,22 +23,62 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "problemMatcher": [
-                "$gcc"
-            ]
+            "problemMatcher": ["$gcc"],
+            "detail": "Compile jala.cpp with g++ (C++17 + Boost)"
         },
         {
-            "label": "run cal-fa",
+            "label": "run jala",
             "type": "shell",
-            "command": "./cal-fa",
+            "command": "./jala",
             "options": {
                 "cwd": "${workspaceFolder}"
             },
-            "dependsOn": [
-                "build cal-fa"
-            ],
+            "dependsOn": ["build jala"],
             "problemMatcher": [],
-            "group": "build"
+            "detail": "Build then run jala"
+        },
+        {
+            "label": "run jala -t",
+            "type": "shell",
+            "command": "./jala -t",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": ["build jala"],
+            "problemMatcher": [],
+            "detail": "Build then show current date/time"
+        },
+        {
+            "label": "make build",
+            "type": "shell",
+            "command": "make",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": ["$gcc"],
+            "detail": "Build via Makefile"
+        },
+        {
+            "label": "make test",
+            "type": "shell",
+            "command": "make test",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": ["make build"],
+            "problemMatcher": [],
+            "detail": "Run test suite"
+        },
+        {
+            "label": "make clean",
+            "type": "shell",
+            "command": "make clean",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "detail": "Remove build artifacts"
         }
     ]
 }

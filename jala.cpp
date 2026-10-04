@@ -16,7 +16,7 @@
 
 namespace bg = boost::gregorian;
 
-const std::string VERSION = "0.5.0";
+const std::string VERSION = "0.8.0";
 
 // ==================== رنگ‌ها ====================
 const std::string RESET   = "\033[0m";
@@ -521,7 +521,7 @@ int cmd_today(const std::string& fmt_arg, const Options& opts) {
 // ==================== راهنما ====================
 void print_help(const char* prog) {
     std::cout << "\n";
-    std::cout << BOLD << "cal-fa " << VERSION << RESET
+    std::cout << BOLD << "jala " << VERSION << RESET
               << " — Persian calendar in terminal\n\n";
     std::cout << BOLD << "Usage:" << RESET << "\n";
     std::cout << "  " << prog << " [options] [month] [year]\n";
@@ -623,7 +623,7 @@ int main(int argc, char* argv[]) {
                 print_help(argv[0]);
                 return 0;
             case 'v':
-                std::cout << "cal-fa " << VERSION << "\n";
+                std::cout << "jala " << VERSION << "\n";
                 return 0;
             default:
                 print_help(argv[0]);
