@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-BIN="./jala"
+BIN="${JALA_BIN:-./jala}"
 PASS=0
 FAIL=0
 
@@ -11,7 +11,7 @@ RESET='\033[0m'
 
 assert_contains() {
     local desc="$1" output="$2" expected="$3"
-    if echo "$output" | grep -qF "$expected"; then
+    if echo "$output" | grep -qF -e "$expected"; then
         echo -e "${GREEN}✓${RESET} $desc"
         PASS=$((PASS + 1))
     else
@@ -23,7 +23,7 @@ assert_contains() {
 
 assert_not_contains() {
     local desc="$1" output="$2" unexpected="$3"
-    if echo "$output" | grep -qF "$unexpected"; then
+    if echo "$output" | grep -qF -e "$unexpected"; then
         echo -e "${RED}✗${RESET} $desc"
         FAIL=$((FAIL + 1))
     else

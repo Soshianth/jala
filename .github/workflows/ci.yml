@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build-and-test:
+    name: Build and test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        compiler: [g++, clang++]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Boost
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libboost-all-dev
+
+      - name: Set compiler
+        run: |
+          if [ "${{ matrix.compiler }}" = "clang++" ]; then
+            echo "CXX=clang++" >> $GITHUB_ENV
+          else
+            echo "CXX=g++" >> $GITHUB_ENV
+          fi
+
+      - name: Build with make
+        run: make CXX=$CXX
+
+      - name: Run tests
+        run: make test
+
+      - name: Verify -v and -h
+        run: |
+          ./jala -v
+          ./jala -h
+
+      - name: Verify month rendering
+        run: |
+          ./jala -n 7 1405
+          ./jala -n -3 7 1405
+          ./jala -n -y 1405
+
+      - name: Verify conversion
+        run: |
+          ./jala -n -c 1405/07/12 | grep -F -e "2026"
+          ./jala -n -c 2026-10-04 | grep -F -e "1405"

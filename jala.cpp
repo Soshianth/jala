@@ -16,7 +16,7 @@
 
 namespace bg = boost::gregorian;
 
-const std::string VERSION = "0.8.0";
+const std::string VERSION = "1.0.0";
 
 // ==================== رنگ‌ها ====================
 const std::string RESET   = "\033[0m";
@@ -28,9 +28,6 @@ const std::string YELLOW  = "\033[33m";
 const std::string BLUE    = "\033[34m";
 const std::string CYAN    = "\033[36m";
 
-// کاراکترهای جهت‌دهی یونیکد
-const std::string LRI = "\u2066";
-const std::string PDI = "\u2069";
 
 // ==================== نام‌ها ====================
 const std::vector<std::string> MONTH_NAMES = {
@@ -173,25 +170,50 @@ SimpleDate parse_date(const std::string& s) {
 }
 
 // ==================== عرض نمایشی ====================
+// ==================== عرض نمایشی (نادیده گرفتن ANSI و کاراکترهای صفر-عرض) ====================
 int visible_length(const std::string& s) {
-    int len = 0; bool in_esc = false;
+    int len = 0;
+    bool in_esc = false;
     for (size_t i = 0; i < s.size(); ) {
         unsigned char c = s[i];
-        if (in_esc) { if (c == 'm') in_esc = false; ++i; continue; }
-        if (c == '\033') { in_esc = true; ++i; continue; }
-        if ((c & 0xC0) == 0x80) { ++i; continue; }
-        // نادیده گرفتن کاراکترهای صفر-عرض Unicode
+
+        // دنباله‌ی کد ANSI
+        if (in_esc) {
+            if (c == 'm') in_esc = false;
+            ++i;
+            continue;
+        }
+        if (c == '\033') {
+            in_esc = true;
+            ++i;
+            continue;
+        }
+
+        // بایت ادامه‌ی UTF-8
+        if ((c & 0xC0) == 0x80) {
+            ++i;
+            continue;
+        }
+
+        // کاراکترهای صفر-عرض یونیکد: U+200B..U+200F و U+2060..U+206F
+        // شامل LRM (U+200E) و LRI/PDI (U+2066/U+2069)
         if (c == 0xE2 && i + 2 < s.size()) {
-            unsigned char b = s[i+1], d = s[i+2];
+            unsigned char b = s[i + 1];
+            unsigned char d = s[i + 2];
+            // U+200B..U+200F
             if (b == 0x80 && d >= 0x8B && d <= 0x8F) { i += 3; continue; }
+            // U+2060..U+206F
             if (b == 0x81 && d >= 0xA0 && d <= 0xAF) { i += 3; continue; }
         }
+
+        // کاراکترهای عادی: یک واحد عرض
         ++len;
-        if      ((c & 0x80) == 0x00) i += 1;
-        else if ((c & 0xE0) == 0xC0) i += 2;
-        else if ((c & 0xF0) == 0xE0) i += 3;
-        else if ((c & 0xF8) == 0xF0) i += 4;
-        else                         i += 1;
+
+        if      ((c & 0x80) == 0x00) i += 1;  // ASCII
+        else if ((c & 0xE0) == 0xC0) i += 2;  // 2 بایتی
+        else if ((c & 0xF0) == 0xE0) i += 3;  // 3 بایتی (شامل فارسی)
+        else if ((c & 0xF8) == 0xF0) i += 4;  // 4 بایتی
+        else                         i += 1;  // ناشناخته
     }
     return len;
 }
@@ -214,11 +236,13 @@ int calendar_row_width(const Options& opts) {
 }
 
 // ==================== تولید خطوط یک ماه ====================
+// ==================== تولید خطوط یک ماه ====================
 std::vector<std::string> format_calendar(int year, int month, const Options& opts) {
     std::vector<std::string> lines;
     int cw = cell_width(opts);
     int rw = calendar_row_width(opts);
 
+    // ---- عنوان ماه ----
     int display_year = opts.pahlavi ? (year + 1180) : year;
     std::string title;
     if (opts.persian) {
@@ -237,7 +261,11 @@ std::vector<std::string> format_calendar(int year, int month, const Options& opt
     if (opts.color) tl += RESET;
     lines.push_back(tl);
 
-    // سرستون روزهای هفته
+    // ---- سرستون روزهای هفته ----
+    // در حالت فارسی، هر سلول با LRM (U+200E) احاطه می‌شود تا ترمینال
+    // آن را به‌صورت چپ‌به‌راست رندر کند و با اعداد زیرش هم‌تراز بماند.
+    // LRM برخلاف LRI/PDI در بیشتر ترمینال‌ها نامرئی است.
+    const std::string LRM = "\u200E";
     std::string wd;
     for (int i = 0; i < 7; ++i) {
         std::string name;
@@ -246,7 +274,8 @@ std::vector<std::string> format_calendar(int year, int month, const Options& opt
         else                           name = WEEKDAY_SHORT[i];
 
         std::string padded = std::string(cw - visible_length(name), ' ') + name;
-        if (opts.persian) padded = LRI + padded + PDI;
+        if (opts.persian) padded = LRM + padded + LRM;
+
         if (opts.color) wd += BLUE;
         wd += padded;
         if (opts.color) wd += RESET;
@@ -254,7 +283,7 @@ std::vector<std::string> format_calendar(int year, int month, const Options& opt
     }
     lines.push_back(wd);
 
-    // اعداد روزها
+    // ---- اعداد روزها ----
     int first_wd = persian_weekday(year, month, 1);
     int days = persian_month_days(year, month);
     PersianDate today_p = to_persian(bg::day_clock::local_day());
@@ -262,29 +291,37 @@ std::vector<std::string> format_calendar(int year, int month, const Options& opt
 
     std::string row;
     int col = 0;
+
+    // خانه‌های خالی ابتدای ماه
     for (int i = 0; i < first_wd; ++i) {
         row += std::string(cw, ' ');
         ++col;
         if (col < 7) row += " ";
     }
+
+    // اعداد
     for (int d = 1; d <= days; ++d) {
         int num = opts.julian_day ? persian_day_of_year(year, month, d) : d;
         std::string s = std::to_string(num);
         std::string cell = std::string(cw - s.size(), ' ') + s;
         if (opts.persian) cell = to_persian_digits(cell);
+
         int wd_num = persian_weekday(year, month, d);
 
         if (is_current && today_p.day == d) {
+            // امروز: معکوس
             if (opts.color) row += REVERSE;
             row += cell;
             if (opts.color) row += RESET;
         } else if (wd_num == 6) {
+            // جمعه: زرد
             if (opts.color) row += YELLOW;
             row += cell;
             if (opts.color) row += RESET;
         } else {
             row += cell;
         }
+
         ++col;
         if (col == 7) {
             lines.push_back(row);
@@ -295,6 +332,7 @@ std::vector<std::string> format_calendar(int year, int month, const Options& opt
         }
     }
     if (col != 0) lines.push_back(row);
+
     return lines;
 }
 
@@ -564,7 +602,13 @@ int main(int argc, char* argv[]) {
     bool do_convert = false, do_diff = false, do_today = false;
     std::string convert_arg, today_fmt;
 
-    // توجه: -t دیگر optional_argument نیست
+    // ---- احترام به NO_COLOR (https://no-color.org) ----
+    // اگر متغیر محیطی NO_COLOR مقدار غیرخالی داشته باشد، رنگ غیرفعال می‌شود.
+    // کاربر می‌تواند با -n دوباره آن را تأیید کند (که همان اثر را دارد).
+    if (const char* nc = std::getenv("NO_COLOR"); nc && *nc) {
+        opts.color = false;
+    }
+
     static struct option long_opts[] = {
         {"convert", required_argument, 0, 'c'},
         {"diff",    no_argument,       0, 'd'},
@@ -582,7 +626,7 @@ int main(int argc, char* argv[]) {
         {0, 0, 0, 0}
     };
 
-    // رشته‌ی گزینه‌ها: 't' بدون ':' (آرگومان اجباری ندارد)
+    // رشته‌ی گزینه‌های کوتاه (بدون 't:' چون -t آرگومان اجباری ندارد)
     while ((opt = getopt_long(argc, argv, "c:dty3spejPnhv", long_opts, nullptr)) != -1) {
         switch (opt) {
             case 'c':
@@ -655,25 +699,14 @@ int main(int argc, char* argv[]) {
         return cmd_diff(argv[optind], argv[optind + 1], opts);
     }
 
-    // ---- حالت تقویم: تجزیه‌ی [month] [year] ----
+    // ---- تجزیه‌ی ورودی‌های موقعیتی [month] [year] ----
     int remaining = argc - optind;
 
-    if (remaining >= 1) {
+    // حالت خاص: -y با یک آرگومان عددی = سال
+    // مثال: jala -y 1405   (نه jala -y 7 1405)
+    if (opts.full_year && remaining == 1) {
         try {
-            opts.month = std::stoi(argv[optind]);
-            if (opts.month < 1 || opts.month > 12) {
-                std::cerr << "Error: month must be between 1 and 12.\n";
-                return 1;
-            }
-        } catch (...) {
-            std::cerr << "Error: month must be a number.\n";
-            return 1;
-        }
-    }
-
-    if (remaining >= 2) {
-        try {
-            opts.year = std::stoi(argv[optind + 1]);
+            opts.year = std::stoi(argv[optind]);
         } catch (...) {
             std::cerr << "Error: year must be a number.\n";
             return 1;
@@ -682,9 +715,36 @@ int main(int argc, char* argv[]) {
             std::cerr << "Error: year must be between 1 and 9999.\n";
             return 1;
         }
+        // ماه تنظیم نمی‌شود؛ پیش‌فرض امروز است (ولی در -y استفاده نمی‌شود)
+    } else {
+        // حالت عادی: [month] [year]
+        if (remaining >= 1) {
+            try {
+                opts.month = std::stoi(argv[optind]);
+            } catch (...) {
+                std::cerr << "Error: month must be a number.\n";
+                return 1;
+            }
+            if (opts.month < 1 || opts.month > 12) {
+                std::cerr << "Error: month must be between 1 and 12.\n";
+                return 1;
+            }
+        }
+        if (remaining >= 2) {
+            try {
+                opts.year = std::stoi(argv[optind + 1]);
+            } catch (...) {
+                std::cerr << "Error: year must be a number.\n";
+                return 1;
+            }
+            if (opts.year < 1 || opts.year > 9999) {
+                std::cerr << "Error: year must be between 1 and 9999.\n";
+                return 1;
+            }
+        }
     }
 
-    // تعیین تاریخ پیش‌فرض (امروز)
+    // ---- تعیین تاریخ پیش‌فرض (امروز) ----
     PersianDate today_p = to_persian(bg::day_clock::local_day());
     int year  = (opts.year  != -1) ? opts.year  : today_p.year;
     int month = (opts.month != -1) ? opts.month : today_p.month;
