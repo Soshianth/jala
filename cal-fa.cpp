@@ -1,5 +1,5 @@
-// cal_fa.cpp — نسخه 0.4.0
-// چهار قابلیت جدید: -p (فارسی)، -j (روز ژولینی)، -P (مبدأ پهلوی)، -t (jdate)
+// cal_fa.cpp — نسخه 0.5.0
+// تکمیل هم‌ارزی با jcal/jdate: -e، فرمت سفارشی -t، اعتبارسنجی ورودی
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <utility>
 #include <cstdlib>
+#include <cstdio>
 #include <ctime>
 #include <boost/date_time/gregorian/gregorian.hpp>
 #include <getopt.h>
@@ -15,7 +16,7 @@
 
 namespace bg = boost::gregorian;
 
-const std::string VERSION = "0.4.0";
+const std::string VERSION = "0.5.0";
 
 // ==================== رنگ‌ها ====================
 const std::string RESET   = "\033[0m";
@@ -27,8 +28,9 @@ const std::string YELLOW  = "\033[33m";
 const std::string BLUE    = "\033[34m";
 const std::string CYAN    = "\033[36m";
 
-const std::string LRI = "\u2066";  // Left-to-Right Isolate
-const std::string PDI = "\u2069";  // Pop Directional Isolate
+// کاراکترهای جهت‌دهی یونیکد
+const std::string LRI = "\u2066";
+const std::string PDI = "\u2069";
 
 // ==================== نام‌ها ====================
 const std::vector<std::string> MONTH_NAMES = {
@@ -44,10 +46,13 @@ const std::vector<std::string> MONTH_NAMES_FA = {
     "دی", "بهمن", "اسفند"
 };
 
-const std::vector<std::string> WEEKDAY_NAMES = {
+const std::vector<std::string> WEEKDAY_SHORT = {
     "Sh", "Ye", "Do", "Se", "Ch", "Pa", "Jo"
 };
-const std::vector<std::string> WEEKDAY_NAMES_FA = {
+const std::vector<std::string> WEEKDAY_ABBR_EN = {
+    "Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"
+};
+const std::vector<std::string> WEEKDAY_FA = {
     "ش", "ی", "د", "س", "چ", "پ", "ج"
 };
 const std::vector<std::string> WEEKDAY_FULL_EN = {
@@ -69,12 +74,13 @@ struct Options {
     bool three_months = false;
     bool stacked = false;
     bool color = true;
-    bool persian = false;      // -p
-    bool julian_day = false;   // -j
-    bool pahlavi = false;      // -P
+    bool persian = false;
+    bool julian_day = false;
+    bool pahlavi = false;
+    bool english_names = false;   // -e
 };
 
-// ==================== تبدیل ارقام به فارسی ====================
+// ==================== ابزار ====================
 std::string to_persian_digits(const std::string& s) {
     static const char* fa[] = {"۰","۱","۲","۳","۴","۵","۶","۷","۸","۹"};
     std::string out;
@@ -133,7 +139,6 @@ int persian_month_days(int year, int month) {
     return 29;
 }
 
-// شماره روز سال (۱ تا ۳۶۵/۳۶۶)
 int persian_day_of_year(int year, int month, int day) {
     int doy = 0;
     for (int m = 1; m < month; ++m)
@@ -167,7 +172,7 @@ SimpleDate parse_date(const std::string& s) {
     return out;
 }
 
-// ==================== عرض نمایشی (پشتیبانی UTF-8) ====================
+// ==================== عرض نمایشی ====================
 int visible_length(const std::string& s) {
     int len = 0; bool in_esc = false;
     for (size_t i = 0; i < s.size(); ) {
@@ -175,14 +180,12 @@ int visible_length(const std::string& s) {
         if (in_esc) { if (c == 'm') in_esc = false; ++i; continue; }
         if (c == '\033') { in_esc = true; ++i; continue; }
         if ((c & 0xC0) == 0x80) { ++i; continue; }
-
-        // نادیده گرفتن کاراکترهای صفر-عرض یونیکد (U+200B..U+200F و U+2060..U+206F)
+        // نادیده گرفتن کاراکترهای صفر-عرض Unicode
         if (c == 0xE2 && i + 2 < s.size()) {
             unsigned char b = s[i+1], d = s[i+2];
             if (b == 0x80 && d >= 0x8B && d <= 0x8F) { i += 3; continue; }
             if (b == 0x81 && d >= 0xA0 && d <= 0xAF) { i += 3; continue; }
         }
-
         ++len;
         if      ((c & 0x80) == 0x00) i += 1;
         else if ((c & 0xE0) == 0xC0) i += 2;
@@ -200,19 +203,22 @@ std::string pad_visible(const std::string& s, int width) {
 }
 
 // ==================== ابعاد تقویم ====================
+int cell_width(const Options& opts) {
+    int dw = opts.julian_day ? 3 : 2;
+    int ww = (!opts.persian && opts.english_names) ? 3 : 2;
+    return std::max(dw, ww);
+}
+
 int calendar_row_width(const Options& opts) {
-    int cw = opts.julian_day ? 3 : 2;
-    return 7 * cw + 6;
+    return 7 * cell_width(opts) + 6;
 }
 
 // ==================== تولید خطوط یک ماه ====================
 std::vector<std::string> format_calendar(int year, int month, const Options& opts) {
     std::vector<std::string> lines;
-    int cw = opts.julian_day ? 3 : 2;
+    int cw = cell_width(opts);
     int rw = calendar_row_width(opts);
 
-    // عنوان با مبدأ احتمالی پهلوی
-    // عنوان با مبدأ احتمالی شاهنشاهی
     int display_year = opts.pahlavi ? (year + 1180) : year;
     std::string title;
     if (opts.persian) {
@@ -221,7 +227,6 @@ std::vector<std::string> format_calendar(int year, int month, const Options& opt
     } else {
         title = MONTH_NAMES[month - 1] + " " + std::to_string(display_year);
     }
-    // در حالت -P، برچسب (pa) را اضافه کن (مثل jcal)
     if (opts.pahlavi) title += "(pa)";
 
     int pad = (rw - visible_length(title)) / 2;
@@ -233,12 +238,14 @@ std::vector<std::string> format_calendar(int year, int month, const Options& opt
     lines.push_back(tl);
 
     // سرستون روزهای هفته
-    // سرستون روزهای هفته
     std::string wd;
     for (int i = 0; i < 7; ++i) {
-        std::string name = opts.persian ? WEEKDAY_NAMES_FA[i] : WEEKDAY_NAMES[i];
+        std::string name;
+        if (opts.persian)              name = WEEKDAY_FA[i];
+        else if (opts.english_names)   name = WEEKDAY_ABBR_EN[i];
+        else                           name = WEEKDAY_SHORT[i];
+
         std::string padded = std::string(cw - visible_length(name), ' ') + name;
-        // در حالت فارسی، هر سلول را در LRI...PDI قرار می‌دهیم تا LTR رندر شود
         if (opts.persian) padded = LRI + padded + PDI;
         if (opts.color) wd += BLUE;
         wd += padded;
@@ -291,14 +298,13 @@ std::vector<std::string> format_calendar(int year, int month, const Options& opt
     return lines;
 }
 
-// ==================== چاپ تک‌ستونه ====================
+// ==================== چاپ‌ها ====================
 void print_single(const Options& opts, int year, int month) {
     for (const auto& line : format_calendar(year, month, opts))
         std::cout << line << "\n";
     std::cout << "\n";
 }
 
-// ==================== چاپ چند ماه ستونی ====================
 void print_columns(const Options& opts,
                    const std::vector<std::pair<int,int>>& months) {
     std::vector<std::vector<std::string>> all;
@@ -328,7 +334,6 @@ void print_stacked(const Options& opts,
     for (const auto& [y, m] : months) print_single(opts, y, m);
 }
 
-// ==================== کل سال ====================
 void print_year(int year, const Options& opts) {
     int display_year = opts.pahlavi ? (year + 1180) : year;
     std::string ys = opts.persian
@@ -360,7 +365,6 @@ void print_year(int year, const Options& opts) {
     }
 }
 
-// ==================== سه ماه ====================
 void print_three_months(int year, int month, const Options& opts) {
     int prev = month - 1, next = month + 1;
     int py = year, ny = year;
@@ -378,14 +382,14 @@ int cmd_convert(const std::string& arg, const Options& opts) {
         std::cerr << "Error: cannot parse date '" << arg << "'\n";
         return 1;
     }
-    auto fmt_year = [&](int y) {
-        return opts.persian ? to_persian_digits(std::to_string(y))
-                            : std::to_string(y);
-    };
     auto fmt_num2 = [&](int n) {
         char buf[4];
         std::snprintf(buf, sizeof(buf), "%02d", n);
         return opts.persian ? to_persian_digits(buf) : std::string(buf);
+    };
+    auto fmt_year = [&](int y) {
+        return opts.persian ? to_persian_digits(std::to_string(y))
+                            : std::to_string(y);
     };
 
     if (sd.jalali) {
@@ -429,7 +433,7 @@ int cmd_convert(const std::string& arg, const Options& opts) {
     return 0;
 }
 
-// ==================== اختلاف دو تاریخ ====================
+// ==================== اختلاف ====================
 int cmd_diff(const std::string& a, const std::string& b, const Options& opts) {
     SimpleDate da = parse_date(a), db = parse_date(b);
     if (!da.valid) { std::cerr << "Error: invalid date '" << a << "'\n"; return 1; }
@@ -440,7 +444,6 @@ int cmd_diff(const std::string& a, const std::string& b, const Options& opts) {
                         : bg::date(db.y, db.m, db.d).julian_day();
     long diff = std::abs(j2 - j1);
     long weeks = diff / 7, days_rem = diff % 7;
-
     auto pf = [&](long n) {
         return opts.persian ? to_persian_digits(std::to_string(n))
                             : std::to_string(n);
@@ -457,35 +460,61 @@ int cmd_diff(const std::string& a, const std::string& b, const Options& opts) {
     return 0;
 }
 
-// ==================== jdate (-t) ====================
-int cmd_today(const Options& opts) {
+// ==================== jdate با فرمت سفارشی ====================
+std::string format_jdate(const std::string& fmt, const Options& opts) {
     bg::date g = bg::day_clock::local_day();
     PersianDate p = to_persian(g);
     int wd = persian_weekday(p.year, p.month, p.day);
+    int display_year = opts.pahlavi ? (p.year + 1180) : p.year;
 
     std::time_t t = std::time(nullptr);
     std::tm* lt = std::localtime(&t);
-    char timebuf[16];
-    std::strftime(timebuf, sizeof(timebuf), "%H:%M:%S", lt);
 
-    std::string wdn = opts.persian ? WEEKDAY_FULL_FA[wd] : WEEKDAY_FULL_EN[wd];
-    std::string mn  = opts.persian ? MONTH_NAMES_FA[p.month - 1]
-                                   : MONTH_NAMES[p.month - 1];
+    std::string out;
+    char buf[32];
+    for (size_t i = 0; i < fmt.size(); ++i) {
+        if (fmt[i] == '%' && i + 1 < fmt.size()) {
+            char c = fmt[++i];
+            switch (c) {
+                case 'Y': std::snprintf(buf, sizeof(buf), "%04d", display_year); out += buf; break;
+                case 'y': std::snprintf(buf, sizeof(buf), "%02d", display_year % 100); out += buf; break;
+                case 'm': std::snprintf(buf, sizeof(buf), "%02d", p.month); out += buf; break;
+                case 'd': std::snprintf(buf, sizeof(buf), "%02d", p.day);   out += buf; break;
+                case 'B': out += opts.persian ? MONTH_NAMES_FA[p.month - 1]
+                                              : MONTH_NAMES[p.month - 1]; break;
+                case 'b': out += (opts.persian ? MONTH_NAMES_FA[p.month - 1]
+                                                : MONTH_NAMES[p.month - 1]).substr(0, 3); break;
+                case 'A': out += opts.persian ? WEEKDAY_FULL_FA[wd]
+                                              : WEEKDAY_FULL_EN[wd]; break;
+                case 'a': out += opts.persian ? WEEKDAY_FA[wd]
+                                              : WEEKDAY_ABBR_EN[wd]; break;
+                case 'H': std::snprintf(buf, sizeof(buf), "%02d", lt->tm_hour); out += buf; break;
+                case 'M': std::snprintf(buf, sizeof(buf), "%02d", lt->tm_min);  out += buf; break;
+                case 'S': std::snprintf(buf, sizeof(buf), "%02d", lt->tm_sec);  out += buf; break;
+                case '%': out += '%'; break;
+                case 'n': out += '\n'; break;
+                case 't': out += '\t'; break;
+                default: out += '%'; out += c; break;
+            }
+        } else {
+            out += fmt[i];
+        }
+    }
+    if (opts.persian) out = to_persian_digits(out);
+    return out;
+}
 
-    auto fmt = [&](int n) {
-        return opts.persian ? to_persian_digits(std::to_string(n))
-                            : std::to_string(n);
-    };
+int cmd_today(const std::string& fmt_arg, const Options& opts) {
+    std::string fmt = fmt_arg.empty()
+        ? "%A %d %B %Y  %H:%M:%S"
+        : fmt_arg;
+    if (!fmt.empty() && fmt[0] == '+') fmt = fmt.substr(1);
 
-    std::cout << "\n";
+    std::string out = format_jdate(fmt, opts);
     if (opts.color) std::cout << BOLD << CYAN;
-    std::cout << wdn << " ";
+    std::cout << out;
     if (opts.color) std::cout << RESET;
-    std::cout << fmt(p.day) << " " << mn << " " << fmt(p.year);
-    if (opts.color) std::cout << BOLD;
-    std::cout << "  " << (opts.persian ? to_persian_digits(timebuf) : std::string(timebuf));
-    if (opts.color) std::cout << RESET;
-    std::cout << "\n\n";
+    std::cout << "\n";
     return 0;
 }
 
@@ -498,37 +527,44 @@ void print_help(const char* prog) {
     std::cout << "  " << prog << " [options] [month] [year]\n";
     std::cout << "  " << prog << " -c <date>          # convert date\n";
     std::cout << "  " << prog << " -d <date1> <date2> # diff two dates\n";
-    std::cout << "  " << prog << " -t                 # show current date & time\n\n";
+    std::cout << "  " << prog << " -t [+FORMAT]       # current date & time\n\n";
     std::cout << BOLD << "Options:" << RESET << "\n";
     std::cout << "  -y            Show full year (3-column grid)\n";
     std::cout << "  -3            Show three months side by side\n";
     std::cout << "  -s            Stacked mode (single column)\n";
     std::cout << "  -p            Persian digits and month/weekday names\n";
-    std::cout << "  -j            Show day-of-year (Julian day) instead of day\n";
-    std::cout << "  -P            Use Pahlavi epoch (Jalali year - 621)\n";
-    std::cout << "  -t, --today   Print current date and time, then exit\n";
+    std::cout << "  -e            English full weekday abbreviations (Sat, Sun, ...)\n";
+    std::cout << "  -j            Show day-of-year instead of day-of-month\n";
+    std::cout << "  -P            Imperial (Shahanshahi) year = Jalali + 1180\n";
+    std::cout << "  -t, --today   Print current date and time\n";
     std::cout << "  -c, --convert Convert Jalali <-> Gregorian\n";
     std::cout << "  -d, --diff    Difference in days between two dates\n";
     std::cout << "  -n            No color\n";
     std::cout << "  -h            Show this help\n";
     std::cout << "  -v            Show version\n\n";
+    std::cout << BOLD << "Format specifiers for -t:" << RESET << "\n";
+    std::cout << "  %Y (year)  %y (2-digit year)  %m (month)  %d (day)\n";
+    std::cout << "  %B (full month)  %b (short month)\n";
+    std::cout << "  %A (full weekday)  %a (short weekday)\n";
+    std::cout << "  %H:%M:%S (time)  %% (literal %)\n\n";
     std::cout << BOLD << "Examples:" << RESET << "\n";
-    std::cout << "  " << prog << " -p                    # current month, in Persian\n";
-    std::cout << "  " << prog << " -j 7 1405             # Mehr 1405 with day-of-year\n";
-    std::cout << "  " << prog << " -P 7 1405             # Pahlavi year (784)\n";
+    std::cout << "  " << prog << "                     # current month\n";
+    std::cout << "  " << prog << " -e 7 1405             # English weekday names\n";
     std::cout << "  " << prog << " -t                    # date & time now\n";
-    std::cout << "  " << prog << " -c 1405/07/12         # Jalali -> Gregorian\n";
-    std::cout << "  " << prog << " -d 1405/07/12 today   # days since then\n\n";
-    std::cout << "  -P            Use Imperial (Shahanshahi) year (Jalali + 1180)\n";
+    std::cout << "  " << prog << " -t '+%Y/%m/%d'        # formatted Jalali date\n";
+    std::cout << "  " << prog << " -tp '+%A %d %B %Y'    # fully Persian\n";
+    std::cout << "  " << prog << " -c 1405/07/12         # Jalali -> Gregorian\n\n";
 }
 
+// ==================== تابع اصلی ====================
 // ==================== تابع اصلی ====================
 int main(int argc, char* argv[]) {
     Options opts;
     int opt;
     bool do_convert = false, do_diff = false, do_today = false;
-    std::string convert_arg;
+    std::string convert_arg, today_fmt;
 
+    // توجه: -t دیگر optional_argument نیست
     static struct option long_opts[] = {
         {"convert", required_argument, 0, 'c'},
         {"diff",    no_argument,       0, 'd'},
@@ -537,6 +573,7 @@ int main(int argc, char* argv[]) {
         {"three",   no_argument,       0, '3'},
         {"stacked", no_argument,       0, 's'},
         {"persian", no_argument,       0, 'p'},
+        {"english", no_argument,       0, 'e'},
         {"julian",  no_argument,       0, 'j'},
         {"pahlavi", no_argument,       0, 'P'},
         {"nocolor", no_argument,       0, 'n'},
@@ -545,52 +582,121 @@ int main(int argc, char* argv[]) {
         {0, 0, 0, 0}
     };
 
-    while ((opt = getopt_long(argc, argv, "c:dty3spjPnhv", long_opts, nullptr)) != -1) {
+    // رشته‌ی گزینه‌ها: 't' بدون ':' (آرگومان اجباری ندارد)
+    while ((opt = getopt_long(argc, argv, "c:dty3spejPnhv", long_opts, nullptr)) != -1) {
         switch (opt) {
-            case 'c': do_convert = true; convert_arg = optarg; break;
-            case 'd': do_diff = true; break;
-            case 't': do_today = true; break;
-            case 'y': opts.full_year = true; break;
-            case '3': opts.three_months = true; break;
-            case 's': opts.stacked = true; break;
-            case 'p': opts.persian = true; break;
-            case 'j': opts.julian_day = true; break;
-            case 'P': opts.pahlavi = true; break;
-            case 'n': opts.color = false; break;
-            case 'h': print_help(argv[0]); return 0;
-            case 'v': std::cout << "cal-fa " << VERSION << "\n"; return 0;
-            default:  print_help(argv[0]); return 1;
+            case 'c':
+                do_convert = true;
+                convert_arg = optarg;
+                break;
+            case 'd':
+                do_diff = true;
+                break;
+            case 't':
+                do_today = true;
+                break;
+            case 'y':
+                opts.full_year = true;
+                break;
+            case '3':
+                opts.three_months = true;
+                break;
+            case 's':
+                opts.stacked = true;
+                break;
+            case 'p':
+                opts.persian = true;
+                break;
+            case 'e':
+                opts.english_names = true;
+                break;
+            case 'j':
+                opts.julian_day = true;
+                break;
+            case 'P':
+                opts.pahlavi = true;
+                break;
+            case 'n':
+                opts.color = false;
+                break;
+            case 'h':
+                print_help(argv[0]);
+                return 0;
+            case 'v':
+                std::cout << "cal-fa " << VERSION << "\n";
+                return 0;
+            default:
+                print_help(argv[0]);
+                return 1;
         }
     }
 
-    if (do_convert) return cmd_convert(convert_arg, opts);
-    if (do_today)   return cmd_today(opts);
+    // ---- حالت تبدیل تاریخ ----
+    if (do_convert) {
+        return cmd_convert(convert_arg, opts);
+    }
+
+    // ---- حالت jdate (-t) ----
+    // اگر آرگومان غیرگزینه‌ای بعد از -t مانده باشد، آن را فرمت در نظر می‌گیریم.
+    if (do_today) {
+        if (optind < argc) {
+            today_fmt = argv[optind];
+        }
+        return cmd_today(today_fmt, opts);
+    }
+
+    // ---- حالت اختلاف دو تاریخ ----
     if (do_diff) {
         int rem = argc - optind;
-        if (rem < 2) { std::cerr << "Error: -d requires two dates.\n"; return 1; }
+        if (rem < 2) {
+            std::cerr << "Error: -d requires two dates.\n";
+            return 1;
+        }
         return cmd_diff(argv[optind], argv[optind + 1], opts);
     }
 
+    // ---- حالت تقویم: تجزیه‌ی [month] [year] ----
     int remaining = argc - optind;
+
     if (remaining >= 1) {
         try {
             opts.month = std::stoi(argv[optind]);
             if (opts.month < 1 || opts.month > 12) {
-                std::cerr << "Error: month must be 1..12\n"; return 1;
+                std::cerr << "Error: month must be between 1 and 12.\n";
+                return 1;
             }
-        } catch (...) { std::cerr << "Error: month must be a number\n"; return 1; }
-    }
-    if (remaining >= 2) {
-        try { opts.year = std::stoi(argv[optind + 1]); }
-        catch (...) { std::cerr << "Error: year must be a number\n"; return 1; }
+        } catch (...) {
+            std::cerr << "Error: month must be a number.\n";
+            return 1;
+        }
     }
 
+    if (remaining >= 2) {
+        try {
+            opts.year = std::stoi(argv[optind + 1]);
+        } catch (...) {
+            std::cerr << "Error: year must be a number.\n";
+            return 1;
+        }
+        if (opts.year < 1 || opts.year > 9999) {
+            std::cerr << "Error: year must be between 1 and 9999.\n";
+            return 1;
+        }
+    }
+
+    // تعیین تاریخ پیش‌فرض (امروز)
     PersianDate today_p = to_persian(bg::day_clock::local_day());
     int year  = (opts.year  != -1) ? opts.year  : today_p.year;
     int month = (opts.month != -1) ? opts.month : today_p.month;
 
-    if (opts.full_year)         print_year(year, opts);
-    else if (opts.three_months) print_three_months(year, month, opts);
-    else                        print_single(opts, year, month);
+    // ---- اجرای حالت نهایی ----
+    if (opts.full_year) {
+        print_year(year, opts);
+    } else if (opts.three_months) {
+        print_three_months(year, month, opts);
+    } else {
+        print_single(opts, year, month);
+    }
+
     return 0;
 }

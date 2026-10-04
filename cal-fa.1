@@ -1,0 +1,267 @@
+.\" cal-fa.1 — man page for cal-fa
+.\" Copyright (c) 2026 Alireza
+.\" SPDX-License-Identifier: MIT
+.\"
+.TH CAL-FA 1 "October 2026" "cal-fa 0.5.0" "User Commands"
+.SH NAME
+cal-fa \- display a Persian (Jalali) calendar in the terminal
+.SH SYNOPSIS
+.B cal-fa
+[\fIOPTIONS\fR] [\fIMONTH\fR] [\fIYEAR\fR]
+.br
+.B cal-fa
+.B \-c
+\fIDATE\fR
+.br
+.B cal-fa
+.B \-d
+\fIDATE1 DATE2\fR
+.br
+.B cal-fa
+.B \-t
+[\fI+FORMAT\fR]
+.SH DESCRIPTION
+.B cal-fa
+is a small command-line program that prints the Persian (Jalali)
+calendar in the terminal, closely modeled after
+.BR jcal (1)
+and
+.BR jdate (1).
+It can display a single month, three consecutive months, or a full
+year; it can highlight today, mark Fridays, render Persian digits
+and month names, show the day-of-year, use the Imperial
+(Shahanshahi) year, convert dates between the Jalali and Gregorian
+calendars, and compute the difference between two dates.
+.PP
+The Gregorian-to-Jalali conversion is implemented with the standard
+JDN (Julian Day Number) algorithm and is accurate across the entire
+supported range (years 1 to 9999).
+.SH OPTIONS
+.TP
+.BR \-1
+Print the current month only. This is the default behavior when no
+other output mode is requested.
+.TP
+.BR \-3
+Print three months side by side: the previous month, the current
+(or requested) month, and the next month.
+.TP
+.BR \-y
+Print the full year as a 3 columns \(mu 4 rows grid.
+.TP
+.BR \-s ", " \-\-stacked
+Print months in a single column instead of side by side. Useful
+with
+.B \-3
+or
+.B \-y
+when the terminal is narrow.
+.TP
+.BR \-p ", " \-\-persian
+Render digits and month/weekday names in Persian. Each weekday
+header cell is wrapped in Unicode LRI/PDI markers so the column
+stays left-to-right regardless of the terminal's bidi handling.
+.TP
+.BR \-e ", " \-\-english
+Print three-letter English weekday abbreviations
+.RB ( Sat ", " Sun ", " Mon ", " Tue ", " Wed ", " Thu ", " Fri )
+instead of the short
+.BR Sh/Ye/Do
+form.
+.TP
+.BR \-j ", " \-\-julian
+Show the day-of-year (1 to 365 or 366) instead of the day-of-month.
+In this mode each cell is widened to three columns.
+.TP
+.BR \-P ", " \-\-pahlavi
+Display the year using the Imperial (Shahanshahi) epoch, whose
+origin is the coronation of Cyrus the Great in 559 BC.
+The formula is
+.IR "Imperial year = Jalali year + 1180" .
+A
+.B (pa)
+label is appended to the year in the header.
+.TP
+.BR \-c ", " \-\-convert " " \fIDATE\fR
+Convert
+.I DATE
+between the Jalali and Gregorian calendars and print both.
+If the year part is less than 1700 the input is treated as Jalali;
+otherwise it is treated as Gregorian.
+.TP
+.BR \-d ", " \-\-diff " " \fIDATE1 DATE2\fR
+Print the number of days between
+.I DATE1
+and
+.IR DATE2 .
+When the difference is seven days or more, the result is also shown
+as a whole number of weeks plus the remaining days.
+.TP
+.BR \-t ", " \-\-today " " [\fI+FORMAT\fR]
+Print the current date and time and exit. If
+.I +FORMAT
+is given, it is interpreted like the GNU
+.BR date (1)
+format string (see
+.B "FORMAT SPECIFIERS"
+below). The leading
+.B +
+is optional.
+.TP
+.BR \-n ", " \-\-nocolor
+Disable ANSI color output. Useful when piping the output to a file
+or another program.
+.TP
+.BR \-h ", " \-\-help
+Print a short help message and exit.
+.TP
+.BR \-v ", " \-\-version
+Print version information and exit.
+.SH "DATE FORMATS"
+Dates are accepted in either of the following forms:
+.PP
+.RS 4
+.IP \(bu 2
+.IB YYYY / MM / DD
+.IP \(bu 2
+.IB YYYY \- MM \- DD
+.IP \(bu 2
+.B today
+or
+.B now
+.RE
+.PP
+A year less than 1700 is interpreted as a Jalali year; a year
+greater than or equal to 1700 is interpreted as a Gregorian year.
+This heuristic works for all practical dates but can be overridden
+by writing the year in full.
+.SH "FORMAT SPECIFIERS"
+The
+.B \-t
+option accepts the following conversion specifiers in its format
+string. The list mirrors the subset of GNU
+.BR date (1)
+that is meaningful for a Jalali calendar.
+.TP
+.B %Y
+Four-digit year (Jalali, or Imperial if
+.B \-P
+is set).
+.TP
+.B %y
+Two-digit year.
+.TP
+.B %m
+Two-digit month (01 to 12).
+.TP
+.B %d
+Two-digit day of month (01 to 31).
+.TP
+.B %B
+Full month name (for example
+.IR Mehr ).
+.TP
+.B %b
+Three-letter month name.
+.TP
+.B %A
+Full weekday name (for example
+.IR Sunday
+or
+.IR "یکشنبه" ).
+.TP
+.B %a
+Short weekday name (for example
+.IR Sun
+or
+.IR ی ).
+.TP
+.B %H
+Hour (00 to 23).
+.TP
+.B %M
+Minute (00 to 59).
+.TP
+.B %S
+Second (00 to 59).
+.TP
+.B %%
+A literal percent sign.
+.TP
+.B %n
+A newline.
+.TP
+.B %t
+A tab.
+.SH EXAMPLES
+.TP
+.B cal-fa
+Show the current month.
+.TP
+.B cal-fa 7 1405
+Show Mehr 1405.
+.TP
+.B cal-fa \-3 7 1405
+Show Shahrivar, Mehr, and Aban of 1405 side by side.
+.TP
+.B cal-fa \-ys 1405
+Show all twelve months of 1405 in a single column.
+.TP
+.B cal-fa \-p
+Show the current month with Persian digits and names.
+.TP
+.B cal-fa \-e
+Show the current month with English weekday abbreviations.
+.TP
+.B cal-fa \-j 7 1405
+Show Mehr 1405 with the day-of-year instead of the day-of-month.
+.TP
+.B cal-fa \-P 7 1405
+Show Mehr 1405 using the Imperial year (2585).
+.TP
+.B cal-fa \-t
+Print the current date and time.
+.TP
+.B cal-fa \-tp '+%A %d %B %Y'
+Print the current date with Persian names, for example
+.IR "یکشنبه ۱۲ مهر ۱۴۰۵" .
+.TP
+.B cal-fa \-c 1405/07/12
+Convert 1405/07/12 (Jalali) to Gregorian.
+.TP
+.B cal-fa \-c 2026-10-04
+Convert 2026-10-04 (Gregorian) to Jalali.
+.TP
+.B cal-fa \-d 1405/07/12 today
+Print how many days ago 1405/07/12 was.
+.SH "EXIT STATUS"
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Invalid input (bad month, bad year, unparsable date, or a
+.B \-d
+invocation with fewer than two dates).
+.SH ENVIRONMENT
+.TP
+.B NO_COLOR
+If set to any non-empty value, color output is disabled, matching
+the informal
+.B NO_COLOR
+convention.
+.SH "SEE ALSO"
+.BR jcal (1),
+.BR jdate (1),
+.BR cal (1),
+.BR date (1)
+.SH AUTHOR
+Written by Mahdi Moradi.
+.SH BUGS
+Report bugs at the project's issue tracker.
+.PP
+Persian text alignment in the terminal depends on the font and on
+the terminal's support for bidi control characters. If the weekday
+header appears reversed, try a terminal that supports LRI/PDI
+(for example, recent versions of GNOME Terminal, Konsole, or
+Alacritty).
