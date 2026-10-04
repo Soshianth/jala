@@ -1,59 +1,52 @@
-// cal_fa.cpp
-// تقویم شمسی در ترمینال، شبیه به ncal
-
+// cal_fa.cpp — مرحله ۱: مطابقت با jcal
 #include <iostream>
 #include <iomanip>
 #include <string>
 #include <vector>
 #include <boost/date_time/gregorian/gregorian.hpp>
-//#include <boost/date_time/julian_calendar.hpp>  // برای تقویم جلالی
 
 namespace bg = boost::gregorian;
 
-// رنگ‌های ANSI برای ترمینال
+// ==================== رنگ‌ها ====================
 const std::string RESET   = "\033[0m";
 const std::string REVERSE = "\033[7m";
 const std::string BOLD    = "\033[1m";
+const std::string RED     = "\033[31m";
+const std::string YELLOW  = "\033[33m";
+const std::string BLUE    = "\033[34m";
 
-// نام ماه‌های شمسی
+// ==================== نام ماه‌ها (لاتین) ====================
 const std::vector<std::string> MONTH_NAMES = {
-    "فروردین", "اردیبهشت", "خرداد",
-    "تیر", "مرداد", "شهریور",
-    "مهر", "آبان", "آذر",
-    "دی", "بهمن", "اسفند"
+    "Farvardin", "Ordibehesht", "Khordad",
+    "Tir", "Mordad", "Shahrivar",
+    "Mehr", "Aban", "Azar",
+    "Dey", "Bahman", "Esfand"
 };
 
-// نام روزهای هفته (شنبه تا جمعه)
+// ==================== نام روزهای هفته (لاتین، مطابق jcal) ====================
 const std::vector<std::string> WEEKDAY_NAMES = {
-    "ش", "ی", "د", "س", "چ", "پ", "ج"
+    "Sh", "Ye", "Do", "Se", "Ch", "Pa", "Jo"
 };
 
-// ساختار ساده برای تاریخ شمسی
-struct PersianDate {
-    int year;
-    int month;
-    int day;
-};
+// ==================== ساختار ====================
+struct PersianDate { int year, month, day; };
 
-// پیش‌اعلان تابع تبدیل تاریخ شمسی به JDN
-long persian_to_jdn(int year, int month, int day);
+// ==================== تبدیل تاریخ ====================
+long persian_to_jdn(int year, int month, int day) {
+    long epbase = year - ((year >= 0) ? 474 : 473);
+    long epyear = 474 + (epbase % 2820);
+    long m = (month <= 7) ? (month - 1) * 31 : (month - 1) * 30 + 6;
+    return day + m + ((epyear * 682 - 110) / 2816) +
+           (epyear - 1) * 365 + (epbase / 2820) * 1029983 +
+           1948320;  // ← اصلاح شد (قبلاً ۱۹۴۸۳۲۰ - ۱ بود)
+}
 
-// تبدیل تاریخ میلادی به شمسی با استفاده از boost
-PersianDate to_persian(const bg::date& gdate) {
-    // boost::gregorian::date را به julian day تبدیل می‌کنیم
-    // سپس با استفاده از الگوریتم تبدیل، تاریخ شمسی را به دست می‌آوریم.
-    // برای سادگی از کتابخانه‌ی boost::date_time::julian_calendar استفاده نمی‌کنیم
-    // چون در نسخه‌های جدید Boost ممکن است در دسترس نباشد.
-    // در عوض از الگوریتم استاندارد تبدیل استفاده می‌کنیم.
-
-    long jdn = gdate.julian_day();  // شماره روز ژولینی
-
-    // الگوریتم تبدیل JDN به تقویم جلالی
-    long depoch = jdn - 2121446;  // مبدأ تقویم جلالی (۲۱ مارس ۶۲۲ میلادی)
+PersianDate to_persian(const bg::date& g) {
+    long jdn = g.julian_day();
+    long depoch = jdn - 2121446;
     long cycle = depoch / 1029983;
     long cyear = depoch % 1029983;
     long ycycle, aux1, aux2;
-
     if (cyear == 1029982) {
         ycycle = 2820;
     } else {
@@ -61,68 +54,45 @@ PersianDate to_persian(const bg::date& gdate) {
         aux2 = cyear % 366;
         ycycle = (2134 * aux1 + 2816 * aux2 + 2815) / 1028522 + aux1 + 1;
     }
-
     long pyear = ycycle + 2820 * cycle + 474;
     if (pyear <= 0) pyear--;
-
     long yday = jdn - persian_to_jdn(pyear, 1, 1) + 1;
     long pmonth = (yday <= 186) ? (yday - 1) / 31 + 1 : (yday - 7) / 30 + 1;
     long pday = jdn - persian_to_jdn(pyear, pmonth, 1) + 1;
-
-    return { static_cast<int>(pyear), static_cast<int>(pmonth), static_cast<int>(pday) };
+    return { (int)pyear, (int)pmonth, (int)pday };
 }
 
-// تبدیل تاریخ شمسی به JDN
-long persian_to_jdn(int year, int month, int day) {
-    long epbase = year - ((year >= 0) ? 474 : 473);
-    long epyear = 474 + (epbase % 2820);
-    long m = (month <= 7) ? (month - 1) * 31 : (month - 1) * 30 + 6;
-    return day + m + ((epyear * 682 - 110) / 2816) +
-           (epyear - 1) * 365 + (epbase / 2820) * 1029983 +
-           (1948320 - 1);
+int persian_weekday(int y, int m, int d) {
+    // 0 = Sh (شنبه) ... 6 = Jo (جمعه)
+    return (persian_to_jdn(y, m, d) + 2) % 7;  // ← اصلاح شد
 }
 
-// محاسبه روز هفته (۰ = شنبه، ...، ۶ = جمعه)
-int persian_weekday(int year, int month, int day) {
-    long jdn = persian_to_jdn(year, month, day);
-    // JDN % 7: 0=دوشنبه، 1=سه‌شنبه، ...، 5=شنبه، 6=یکشنبه
-    // می‌خواهیم شنبه=0 شود:
-    int w = (jdn + 1) % 7;  // 0=شنبه، 1=یکشنبه، ...، 6=جمعه
-    return w;
-}
-
-// تعداد روزهای یک ماه شمسی
 int persian_month_days(int year, int month) {
     if (month <= 6) return 31;
     if (month <= 11) return 30;
-    // اسفند
-    // سال کبیسه: باقی‌مانده سال بر ۳۳ تقسیم بر ۳۳ و ...
-    // الگوریتم ساده: اگر (year % 33) در لیست کبیسه‌ها باشد
-    static const int leap_remainders[] = {
-        1, 5, 9, 13, 17, 22, 26, 30
-    };
     int r = year % 33;
-    for (int lr : leap_remainders) {
-        if (r == lr) return 30;
-    }
+    if (r == 1 || r == 5 || r == 9 || r == 13 ||
+        r == 17 || r == 22 || r == 26 || r == 30)
+        return 30;
     return 29;
 }
 
-// چاپ تقویم یک ماه شمسی
-void print_calendar(int year, int month, bool highlight_today = true) {
+// ==================== چاپ تقویم ====================
+void print_calendar(int year, int month) {
     std::string title = MONTH_NAMES[month - 1] + " " + std::to_string(year);
     const int width = 20;
 
     std::cout << "\n";
-    // وسط‌چین کردن عنوان (تقریبی، چون فارسی عرض متفاوتی دارد)
-    int padding = (width - static_cast<int>(title.size())) / 2;
-    if (padding < 0) padding = 0;
-    std::cout << std::string(padding, ' ') << title << "\n";
-    std::cout << std::string(width, '-') << "\n";
 
-    // چاپ نام روزهای هفته
-    for (const auto& name : WEEKDAY_NAMES) {
-        std::cout << std::setw(2) << name << " ";
+    // عنوان وسط‌چین
+    int pad = (width - (int)title.size()) / 2;
+    if (pad < 0) pad = 0;
+    std::cout << std::string(pad, ' ') << title << "\n";
+
+    // سرستون روزهای هفته (آبی)
+    for (int i = 0; i < 7; ++i) {
+        std::cout << BLUE << WEEKDAY_NAMES[i] << RESET;
+        if (i < 6) std::cout << " ";
     }
     std::cout << "\n";
 
@@ -131,8 +101,8 @@ void print_calendar(int year, int month, bool highlight_today = true) {
 
     // تاریخ امروز
     bg::date today_g = bg::day_clock::local_day();
-    PersianDate today = to_persian(today_g);
-    bool is_current = (today.year == year && today.month == month);
+    PersianDate today_p = to_persian(today_g);
+    bool is_current = (today_p.year == year && today_p.month == month);
 
     // خانه‌های خالی ابتدای ماه
     int col = 0;
@@ -141,55 +111,46 @@ void print_calendar(int year, int month, bool highlight_today = true) {
         ++col;
     }
 
+    // اعداد روزها
     for (int d = 1; d <= days; ++d) {
-        std::string cell = std::to_string(d);
-        // راست‌چین کردن در عرض ۲ کاراکتر
-        std::string padded = (cell.size() < 2) ? (" " + cell) : cell;
+        std::string s = std::to_string(d);
+        std::string cell = (s.size() < 2) ? (" " + s) : s;
+        int wd = persian_weekday(year, month, d);
 
-        if (highlight_today && is_current && today.day == d) {
-            std::cout << REVERSE << BOLD << padded << RESET << " ";
+        if (is_current && today_p.day == d) {
+            // امروز: فقط معکوس (پس‌زمینه سفید، متن سیاه)
+            std::cout << REVERSE << cell << RESET;
+        } else if (wd == 6) {
+            // جمعه: زرد
+            std::cout << YELLOW << cell << RESET;
         } else {
-            std::cout << padded << " ";
+            std::cout << cell;
         }
 
         ++col;
         if (col == 7) {
             std::cout << "\n";
             col = 0;
+        } else {
+            std::cout << " ";
         }
     }
     if (col != 0) std::cout << "\n";
     std::cout << "\n";
 }
 
+// ==================== تابع اصلی ====================
 int main(int argc, char* argv[]) {
-    // تاریخ امروز شمسی
+    int year, month;
     bg::date today_g = bg::day_clock::local_day();
-    PersianDate today = to_persian(today_g);
+    PersianDate today_p = to_persian(today_g);
 
-    int year = today.year;
-    int month = today.month;
-
-    // آرگومان‌های خط فرمان: cal_fa [month] [year]
-    if (argc >= 2) {
-        try {
-            month = std::stoi(argv[1]);
-            if (month < 1 || month > 12) {
-                std::cerr << "خطا: شماره ماه باید بین ۱ تا ۱۲ باشد.\n";
-                return 1;
-            }
-        } catch (...) {
-            std::cerr << "خطا: شماره ماه باید عدد باشد.\n";
-            return 1;
-        }
-    }
     if (argc >= 3) {
-        try {
-            year = std::stoi(argv[2]);
-        } catch (...) {
-            std::cerr << "خطا: سال باید عدد باشد.\n";
-            return 1;
-        }
+        month = std::stoi(argv[1]);
+        year  = std::stoi(argv[2]);
+    } else {
+        year  = today_p.year;
+        month = today_p.month;
     }
 
     print_calendar(year, month);
