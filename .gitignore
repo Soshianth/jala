@@ -102,3 +102,6 @@ jala_*.deb
 
 # Object files in src/
 src/*.o
+
+# Unit test binary
+tests/jalali_test

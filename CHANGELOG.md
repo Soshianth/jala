@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-05
+
+### Added
+
+- `-B`, `--no-bidi`: skip the LRM wrapping of Persian weekday cells.
+  Useful on terminals that render LRM as a visible control character
+  or that mishandle bidi controls. Without this flag, the previous
+  behavior is preserved.
+- C++ unit tests in `tests/jalali_test.cpp`, exercising the calendar
+  math directly (round-trip conversion, weekday, month lengths,
+  day-of-year, parsing, digit translation).
+- New `make test-unit` target that builds and runs the unit tests.
+- Separate CMake build job in CI, running CTest independently of
+  the Makefile path.
+
+### Changed
+
+- Sources moved into `src/` and split into three files:
+  - `src/jalali.hpp`: public interface of the calendar library.
+  - `src/jalali.cpp`: pure calendar math, no I/O.
+  - `src/main.cpp`: CLI, rendering, and dispatch.
+- Makefile now compiles each source to an object file and links
+  them together, with `jalali.hpp` listed as a dependency.
+- CMake enables policy CMP0167 and uses `find_package(Boost CONFIG)`
+  so the build is clean on CMake 3.30+ where FindBoost was removed.
+- CI matrix now also runs clang++ alongside g++.
+
+### Fixed
+
+- `%b` (short month) in Persian mode no longer truncates the
+  multibyte UTF-8 name mid-character. It falls back to the full
+  Persian name.
+
+[1.0.1]: https://github.com/mahdymorady/jala/compare/v1.0.0...v1.0.1
+
+
 ## [1.0.0] - 2026-10-04
 
 First stable release.
@@ -50,5 +86,5 @@ First stable release.
 - `-y` with a single numeric argument now correctly treats it as the
   year rather than the month
 
-[Unreleased]: https://github.com/YOUR_USERNAME/jala/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/YOUR_USERNAME/jala/compare/v1.0.1...HEAD
 [1.0.0]: https://github.com/YOUR_USERNAME/jala/releases/tag/v1.0.0

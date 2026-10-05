@@ -27,7 +27,7 @@ namespace {
 // Constants
 // =============================================================================
 
-constexpr std::string_view VERSION = "1.0.0";
+constexpr std::string_view VERSION = "1.0.1";
 
 // ANSI escape sequences for terminal colors.
 namespace ansi {
