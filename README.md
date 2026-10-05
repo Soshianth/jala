@@ -58,7 +58,7 @@ Debian/Ubuntu:
 
 Build and install:
 
-    git clone https://github.com/YOUR_USERNAME/jala.git
+    git clone https://github.com/mahdymorady/jala.git
     cd jala
     make
     sudo make install
@@ -68,16 +68,16 @@ Build and install:
 **Debian / Ubuntu (x86_64):**
 
 ```bash
-wget https://github.com/mahdymorady/jala/releases/download/v1.0.1/jala_1.0.0-1_amd64.deb
-sudo dpkg -i jala_1.0.0-1_amd64.deb
+wget https://github.com/mahdymorady/jala/releases/download/v1.0.1/jala_1.0.1-1_amd64.deb
+sudo dpkg -i jala_1.0.1-1_amd64.deb
 ```
 
 **Other Linux distributions (x86_64):**
 
 ```bash
-wget https://github.com/mahdymorady/jala/releases/download/v1.0.1/jala-v1.0.0-linux-x86_64.tar.gz
-tar xzf jala-v1.0.0-linux-x86_64.tar.gz
-sudo install -m 755 jala-v1.0.0-linux-x86_64 /usr/local/bin/jala
+wget https://github.com/mahdymorady/jala/releases/download/v1.0.1/jala-v1.0.1-linux-x86_64.tar.gz
+tar xzf jala-v1.0.1-linux-x86_64.tar.gz
+sudo install -m 755 jala-v1.0.1-linux-x86_64 /usr/local/bin/jala
 ```
 
 ## Usage
@@ -103,6 +103,7 @@ See `man jala` for the full manual.
 | `-c, --convert <date>` | Convert Jalali and Gregorian |
 | `-d, --diff <d1> <d2>` | Days between two dates |
 | `-t, --today [+FORMAT]` | Current date and time |
+| `-B, --no-bidi` | Do not wrap Persian weekday cells in LRM |
 | `-n` | No color |
 | `-h` | Help |
 | `-v` | Version |

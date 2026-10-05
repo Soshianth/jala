@@ -87,4 +87,4 @@ First stable release.
   year rather than the month
 
 [Unreleased]: https://github.com/mahdymorady/jala/compare/v1.0.1...main
-[1.0.0]: https://github.com/YOUR_USERNAME/jala/releases/tag/v1.0.0
+[1.0.0]: https://github.com/mahdymorady/jala/releases/tag/v1.0.0
