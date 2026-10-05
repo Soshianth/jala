@@ -68,14 +68,14 @@ Build and install:
 **Debian / Ubuntu (x86_64):**
 
 ```bash
-wget https://github.com/mahdymorady/jala/releases/download/v1.0.0/jala_1.0.0-1_amd64.deb
+wget https://github.com/mahdymorady/jala/releases/download/v1.0.1/jala_1.0.0-1_amd64.deb
 sudo dpkg -i jala_1.0.0-1_amd64.deb
 ```
 
 **Other Linux distributions (x86_64):**
 
 ```bash
-wget https://github.com/mahdymorady/jala/releases/download/v1.0.0/jala-v1.0.0-linux-x86_64.tar.gz
+wget https://github.com/mahdymorady/jala/releases/download/v1.0.1/jala-v1.0.0-linux-x86_64.tar.gz
 tar xzf jala-v1.0.0-linux-x86_64.tar.gz
 sudo install -m 755 jala-v1.0.0-linux-x86_64 /usr/local/bin/jala
 ```
