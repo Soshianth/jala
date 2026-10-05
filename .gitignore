@@ -76,3 +76,19 @@ Thumbs.db
 # ===================================================================
 .cache/
 compile_commands.json
+
+# ===================================================================
+# Debian packaging (build artifacts)
+# ===================================================================
+debian/files
+debian/*.substvars
+debian/*.debhelper
+debian/debhelper-build-stamp
+debian/.debhelper/
+debian/jala/
+debian/tmp/
+../*.deb
+../*.buildinfo
+../*.changes
+../*.dsc
+../*.tar.*

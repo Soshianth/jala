@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	$(MAKE) CXXFLAGS="-std=c++17 -O2 -Wall -Wextra" all
+
+override_dh_auto_install:
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/jala PREFIX=/usr
+
+override_dh_auto_clean:
+	$(MAKE) clean
+
+override_dh_auto_test:
+	$(MAKE) test

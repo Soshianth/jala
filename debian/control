@@ -1,0 +1,25 @@
+Source: jala
+Section: utils
+Priority: optional
+Maintainer: Alireza <mahdymorady@users.noreply.github.com>
+Build-Depends: debhelper-compat (= 13),
+               g++,
+               libboost-date-time-dev
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://github.com/mahdymorady/jala
+Vcs-Git: https://github.com/mahdymorady/jala.git
+Vcs-Browser: https://github.com/mahdymorady/jala
+
+Package: jala
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Persian (Jalali) calendar in the terminal
+ jala is a command-line tool that prints the Persian (Jalali)
+ calendar in the terminal. It supports single-month, three-month,
+ and full-year layouts, Persian digits and names, day-of-year,
+ the Imperial year, English weekday names, date conversion between
+ Jalali and Gregorian calendars, and date differences.
+ .
+ It is inspired by jcal and jdate and adds conversion and diff
+ subcommands.
