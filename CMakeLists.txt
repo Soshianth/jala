@@ -29,6 +29,7 @@ find_package(Boost 1.66 REQUIRED CONFIG COMPONENTS date_time)
 add_executable(jala
     src/main.cpp
     src/jalali.cpp
+    src/holidays.cpp
 )
 
 target_include_directories(jala PRIVATE src)

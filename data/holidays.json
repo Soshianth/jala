@@ -1,0 +1,21 @@
+{
+  "_comment": "Iranian official holidays. Dates are Jalali (YYYY/MM/DD). Update annually from time.ir or the official Majlis announcement.",
+  "_coverage": "1405",
+  "holidays": {
+    "1405/01/01": "نوروز",
+    "1405/01/02": "نوروز",
+    "1405/01/03": "نوروز",
+    "1405/01/04": "نوروز",
+    "1405/01/12": "روز جمهوری اسلامی",
+    "1405/01/13": "روز طبیعت",
+    "1405/03/14": "رحلت امام خمینی",
+    "1405/03/15": "قیام ۱۵ خرداد",
+    "1405/11/22": "پیروزی انقلاب اسلامی",
+    "1405/12/29": "روز ملی شدن صنعت نفت",
+
+    "_variable_comment": "The following are religious holidays that follow the lunar calendar. Verify exact Jalali dates for 1405 from time.ir",
+    "1405/01/01": "نوروز",
+    "1405/05/05": "تاسوعای حسینی (نمونه - بررسی شود)",
+    "1405/05/06": "عاشورای حسینی (نمونه - بررسی شود)"
+  }
+}

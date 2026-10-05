@@ -9,7 +9,7 @@
 
 TARGET      := jala
 SRCDIR      := src
-SRCS        := $(SRCDIR)/main.cpp $(SRCDIR)/jalali.cpp
+SRCS        := $(SRCDIR)/main.cpp $(SRCDIR)/jalali.cpp $(SRCDIR)/holidays.cpp
 HDRS        := $(SRCDIR)/jalali.hpp
 OBJS        := $(SRCS:.cpp=.o)
 

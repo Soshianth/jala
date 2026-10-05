@@ -4,6 +4,7 @@
 // =============================================================================
 
 #include "jalali.hpp"
+#include "holidays.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -20,6 +21,8 @@
 #include <unistd.h>
 
 using namespace jala;
+
+namespace bg = boost::gregorian;
 
 namespace {
 
@@ -38,6 +41,7 @@ constexpr std::string_view green   = "\033[32m";
 constexpr std::string_view yellow  = "\033[33m";
 constexpr std::string_view blue    = "\033[34m";
 constexpr std::string_view cyan    = "\033[36m";
+constexpr std::string_view red     = "\033[31m";
 } // namespace ansi
 
 // Unicode Left-to-Right Mark (U+200E). Wrapping a Persian weekday
@@ -62,6 +66,7 @@ struct Options {
     bool imperial      = false;
     bool english_names = false;
     bool no_bidi       = false;
+    bool show_holidays = true;
 };
 
 // =============================================================================
@@ -95,11 +100,11 @@ struct Options {
         }
 
         ++len;
-        if      ((c & 0x80) == 0x00) i += 1;
-        else if ((c & 0xE0) == 0xC0) i += 2;
-        else if ((c & 0xF0) == 0xE0) i += 3;
-        else if ((c & 0xF8) == 0xF0) i += 4;
-        else                         i += 1;
+
+        if      ((c & 0xE0) == 0xC0) i += 2;  // 2-byte UTF-8
+        else if ((c & 0xF0) == 0xE0) i += 3;  // 3-byte UTF-8
+        else if ((c & 0xF8) == 0xF0) i += 4;  // 4-byte UTF-8
+        else                         i += 1;  // ASCII or invalid byte
     }
     return len;
 }
@@ -160,7 +165,8 @@ struct Options {
         cell += name;
 
         if (opts.persian && !opts.no_bidi) {
-            cell = std::string(LRM) + cell + std::string(LRM);
+            cell.insert(0, LRM);
+            cell.append(LRM);
         }
 
         if (opts.color) header += ansi::blue;
@@ -173,13 +179,18 @@ struct Options {
     // ---- Day numbers ----
     const int first_wd = persian_weekday(year, month, 1);
     const int days     = persian_month_days(year, month);
-    const PersianDate today = to_persian(
-        boost::gregorian::day_clock::local_day());
-    const bool is_current = (today.year == year && today.month == month);
+    const PersianDate today = to_persian(bg::day_clock::local_day());
+    const bool is_current   = (today.year == year && today.month == month);
+
+    // Build the holiday index once per program run. Since this function
+    // may be called multiple times (e.g. for a full year), a function-
+    // local static ensures we only construct it once.
+    static const HolidayIndex holidays;
 
     std::string row;
     int col = 0;
 
+    // Leading blank cells before the first day of the month.
     for (int i = 0; i < first_wd; ++i) {
         row.append(static_cast<size_t>(cw), ' ');
         if (++col < 7) row += ' ';
@@ -193,12 +204,22 @@ struct Options {
         if (opts.persian) cell = to_persian_digits(cell);
 
         const int wd = persian_weekday(year, month, d);
+        const bool is_holiday =
+            opts.show_holidays &&
+            holidays.contains(format_holiday_key(year, month, d));
 
         if (is_current && today.day == d) {
+            // Today: reverse video (highest priority)
             if (opts.color) row += ansi::reverse;
             row += cell;
             if (opts.color) row += ansi::reset;
+        } else if (is_holiday) {
+            // Official holiday: red
+            if (opts.color) row += ansi::red;
+            row += cell;
+            if (opts.color) row += ansi::reset;
         } else if (wd == 6) {
+            // Friday: yellow
             if (opts.color) row += ansi::yellow;
             row += cell;
             if (opts.color) row += ansi::reset;
@@ -240,18 +261,18 @@ void print_columns(const Options& opts,
         max_lines = std::max(max_lines, v.size());
 
     const int col_w = row_width(opts);
-    const int gap   = 3;
 
     for (size_t i = 0; i < max_lines; ++i) {
         std::string line;
         for (size_t j = 0; j < rendered.size(); ++j) {
+            constexpr int gap = 3;
             const std::string_view cell =
-                (i < rendered[j].size())
+                i < rendered[j].size()
                     ? std::string_view(rendered[j][i])
                     : std::string_view{};
             line += pad_visible(cell, col_w);
             if (j + 1 < rendered.size())
-                line.append(static_cast<size_t>(gap), ' ');
+                line.append(gap, ' ');
         }
         while (!line.empty() && line.back() == ' ') line.pop_back();
         std::cout << line << '\n';
@@ -511,6 +532,7 @@ void print_help(const char* prog) {
     cout << "  -c, --convert Convert Jalali <-> Gregorian\n";
     cout << "  -d, --diff    Difference in days between two dates\n";
     cout << "  -B, --no-bidi Do not wrap Persian weekday cells in LRM\n";
+    cout << "  -H, --no-holidays  Do not highlight Iranian holidays\n";
     cout << "  -n            No color\n";
     cout << "  -h            Show this help\n";
     cout << "  -v            Show version\n\n";
@@ -541,21 +563,22 @@ int main(int argc, char* argv[]) {
     if (const char* nc = std::getenv("NO_COLOR"); nc && *nc)
         opts.color = false;
 
-    static const option long_opts[] = {
-        {"convert", required_argument, nullptr, 'c'},
-        {"diff",    no_argument,       nullptr, 'd'},
-        {"today",   no_argument,       nullptr, 't'},
-        {"year",    no_argument,       nullptr, 'y'},
-        {"three",   no_argument,       nullptr, '3'},
-        {"stacked", no_argument,       nullptr, 's'},
-        {"persian", no_argument,       nullptr, 'p'},
-        {"english", no_argument,       nullptr, 'e'},
-        {"julian",  no_argument,       nullptr, 'j'},
-        {"pahlavi", no_argument,       nullptr, 'P'},
-        {"no-bidi", no_argument,       nullptr, 'B'},
-        {"nocolor", no_argument,       nullptr, 'n'},
-        {"help",    no_argument,       nullptr, 'h'},
-        {"version", no_argument,       nullptr, 'v'},
+    static const struct option long_opts[] = {
+        {"convert",     required_argument, nullptr, 'c'},
+        {"diff",        no_argument,       nullptr, 'd'},
+        {"today",       no_argument,       nullptr, 't'},
+        {"year",        no_argument,       nullptr, 'y'},
+        {"three",       no_argument,       nullptr, '3'},
+        {"stacked",     no_argument,       nullptr, 's'},
+        {"persian",     no_argument,       nullptr, 'p'},
+        {"english",     no_argument,       nullptr, 'e'},
+        {"julian",      no_argument,       nullptr, 'j'},
+        {"pahlavi",     no_argument,       nullptr, 'P'},
+        {"no-bidi",     no_argument,       nullptr, 'B'},
+        {"no-holidays", no_argument,       nullptr, 'H'},
+        {"nocolor",     no_argument,       nullptr, 'n'},
+        {"help",        no_argument,       nullptr, 'h'},
+        {"version",     no_argument,       nullptr, 'v'},
         {nullptr, 0, nullptr, 0}
     };
 
@@ -566,7 +589,7 @@ int main(int argc, char* argv[]) {
     std::string today_fmt;
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "c:dty3spejPBNnhv",
+    while ((opt = getopt_long(argc, argv, "c:dty3spejPBNHnhv",
                               long_opts, nullptr)) != -1) {
         switch (opt) {
             case 'c': do_convert = true; convert_arg = optarg; break;
@@ -580,6 +603,7 @@ int main(int argc, char* argv[]) {
             case 'j': opts.julian_day    = true; break;
             case 'P': opts.imperial      = true; break;
             case 'B': opts.no_bidi       = true; break;
+            case 'H': opts.show_holidays = false; break;
             case 'n': opts.color         = false; break;
             case 'h': print_help(argv[0]); return 0;
             case 'v': std::cout << "jala " << VERSION << '\n'; return 0;
@@ -605,6 +629,7 @@ int main(int argc, char* argv[]) {
     const int remaining = argc - optind;
 
     if (opts.full_year && remaining == 1) {
+        // `-y <year>` — a single positional argument is the year.
         try {
             opts.year = std::stoi(argv[optind]);
         } catch (...) {
@@ -647,8 +672,8 @@ int main(int argc, char* argv[]) {
 
     const PersianDate today = to_persian(
         boost::gregorian::day_clock::local_day());
-    const int year  = (opts.year  != -1) ? opts.year  : today.year;
-    const int month = (opts.month != -1) ? opts.month : today.month;
+    const int year  = opts.year  != -1 ? opts.year  : today.year;
+    const int month = opts.month != -1 ? opts.month : today.month;
 
     if (opts.full_year)         print_year(year, opts);
     else if (opts.three_months) print_three_months(year, month, opts);
