@@ -7,6 +7,35 @@
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://en.cppreference.com/w/cpp/17)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+## Preview
+
+```text
+$ jala -p
+      مهر ۱۴۰۵
+ ش‎ ‎ ی‎ ‎ د‎ ‎ س‎ ‎ چ‎ ‎ پ‎ ‎ ج‎
+             ۱  ۲  ۳
+ ۴  ۵  ۶  ۷  ۸  ۹ ۱۰
+۱۱ ۱۲ ۱۳ ۱۴ ۱۵ ۱۶ ۱۷
+۱۸ ۱۹ ۲۰ ۲۱ ۲۲ ۲۳ ۲۴
+۲۵ ۲۶ ۲۷ ۲۸ ۲۹ ۳۰
+
+$ jala -3 7 1405
+Shahrivar 1405           Mehr 1405           Aban 1405
+Sh Ye Do Se Ch Pa Jo   Sh Ye Do Se Ch Pa Jo   Sh Ye Do Se Ch Pa Jo
+ 1  2  3  4  5  6  7                 1  2  3     1  2  3  4  5  6  7
+ 8  9 10 11 12 13 14     4  5  6  7  8  9 10     8  9 10 11 12 13 14
+15 16 17 18 19 20 21    11 12 13 14 15 16 17    15 16 17 18 19 20 21
+22 23 24 25 26 27 28    18 19 20 21 22 23 24    22 23 24 25 26 27 28
+29 30 31                25 26 27 28 29 30       29 30
+
+$ jala -t
+Monday 13 Mehr 1405  18:26:16
+
+$ jala -c 1405/07/12
+Jalali:    1405/07/12  (Sunday)
+Gregorian: 2026-10-04
+```
+
 ## Features
 
 - Single month, three months, or full year — side-by-side or stacked
