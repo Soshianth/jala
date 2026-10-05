@@ -92,3 +92,11 @@ debian/tmp/
 ../*.changes
 ../*.dsc
 ../*.tar.*
+
+# ===================================================================
+# Release artifacts (uploaded to GitHub Releases, not tracked)
+# ===================================================================
+jala-v*-linux-x86_64
+jala-v*-linux-x86_64.tar.gz
+jala_*.deb
+
