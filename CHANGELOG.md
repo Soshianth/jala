@@ -86,5 +86,5 @@ First stable release.
 - `-y` with a single numeric argument now correctly treats it as the
   year rather than the month
 
-[Unreleased]: https://github.com/YOUR_USERNAME/jala/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/mahdymorady/jala/compare/v1.0.1...main
 [1.0.0]: https://github.com/YOUR_USERNAME/jala/releases/tag/v1.0.0
