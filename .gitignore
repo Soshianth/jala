@@ -100,3 +100,5 @@ jala-v*-linux-x86_64
 jala-v*-linux-x86_64.tar.gz
 jala_*.deb
 
+# Object files in src/
+src/*.o

@@ -1,24 +1,41 @@
 # Makefile for jala
 # Persian (Jalali) calendar in the terminal
 
+# =============================================================================
+# Configuration
+# =============================================================================
+
 TARGET      := jala
-SRC         := jala.cpp
+SRCDIR      := src
+SRCS        := $(SRCDIR)/main.cpp $(SRCDIR)/jalali.cpp
+HDRS        := $(SRCDIR)/jalali.hpp
+OBJS        := $(SRCS:.cpp=.o)
+
 MANPAGE     := jala.1
 PREFIX      ?= /usr/local
 BINDIR      := $(PREFIX)/bin
 MANDIR      := $(PREFIX)/share/man/man1
 
 CXX         ?= g++
-CXXFLAGS    ?= -std=c++17 -O2 -g -Wall -Wextra
+CXXFLAGS    ?= -std=c++17 -O2 -g -Wall -Wextra -I$(SRCDIR)
 LDFLAGS     ?=
 LDLIBS      ?= -lboost_date_time
+
+# =============================================================================
+# Targets
+# =============================================================================
 
 .PHONY: all clean install uninstall test debug
 
 all: $(TARGET)
 
-$(TARGET): $(SRC)
-	$(CXX) $(CXXFLAGS) -o $@ $< $(LDFLAGS) $(LDLIBS)
+# Link
+$(TARGET): $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $(OBJS) $(LDFLAGS) $(LDLIBS)
+
+# Compile each source to an object file
+$(SRCDIR)/%.o: $(SRCDIR)/%.cpp $(HDRS)
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 debug: CXXFLAGS += -DDEBUG -O0
 debug: clean $(TARGET)
@@ -41,5 +58,5 @@ test: $(TARGET)
 	@./tests/run_tests.sh
 
 clean:
-	rm -f $(TARGET) *.o
+	rm -f $(TARGET) $(OBJS)
 	@echo "Cleaned."

@@ -11,9 +11,11 @@
                 "-g",
                 "-Wall",
                 "-Wextra",
+                "-Isrc",
                 "-o",
                 "jala",
-                "jala.cpp",
+                "src/main.cpp",
+                "src/jalali.cpp",
                 "-lboost_date_time"
             ],
             "options": {
@@ -24,7 +26,7 @@
                 "isDefault": true
             },
             "problemMatcher": ["$gcc"],
-            "detail": "Compile jala.cpp with g++ (C++17 + Boost)"
+            "detail": "Compile src/*.cpp with g++ (C++17 + Boost)"
         },
         {
             "label": "run jala",
@@ -34,19 +36,7 @@
                 "cwd": "${workspaceFolder}"
             },
             "dependsOn": ["build jala"],
-            "problemMatcher": [],
-            "detail": "Build then run jala"
-        },
-        {
-            "label": "run jala -t",
-            "type": "shell",
-            "command": "./jala -t",
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "dependsOn": ["build jala"],
-            "problemMatcher": [],
-            "detail": "Build then show current date/time"
+            "problemMatcher": []
         },
         {
             "label": "make build",
@@ -56,8 +46,7 @@
                 "cwd": "${workspaceFolder}"
             },
             "group": "build",
-            "problemMatcher": ["$gcc"],
-            "detail": "Build via Makefile"
+            "problemMatcher": ["$gcc"]
         },
         {
             "label": "make test",
@@ -67,8 +56,7 @@
                 "cwd": "${workspaceFolder}"
             },
             "dependsOn": ["make build"],
-            "problemMatcher": [],
-            "detail": "Run test suite"
+            "problemMatcher": []
         },
         {
             "label": "make clean",
@@ -77,8 +65,7 @@
             "options": {
                 "cwd": "${workspaceFolder}"
             },
-            "problemMatcher": [],
-            "detail": "Remove build artifacts"
+            "problemMatcher": []
         }
     ]
 }

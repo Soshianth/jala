@@ -1,53 +1,39 @@
 // =============================================================================
-// jala.cpp — Persian (Jalali) calendar in the terminal
+// main.cpp — command-line interface, rendering, and dispatch for jala
 // SPDX-License-Identifier: MIT
-//
-// A modern reimplementation of jcal(1) and jdate(1) with additional
-// date-conversion and date-difference commands.
-//
-// Gregorian <-> Jalali conversion uses the standard JDN (Julian Day
-// Number) algorithm and is accurate across years 1..9999.
-//
-// Build:  g++ -std=c++17 -O2 -o jala jala.cpp -lboost_date_time
-// Usage:  jala --help
 // =============================================================================
 
+#include "jalali.hpp"
+
 #include <algorithm>
-#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <iomanip>
 #include <iostream>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
-#include <boost/date_time/gregorian/gregorian.hpp>
 #include <getopt.h>
 #include <unistd.h>
 
-namespace {
+using namespace jala;
 
-namespace bg = boost::gregorian;
+namespace {
 
 // =============================================================================
 // Constants
 // =============================================================================
 
-constexpr std::string_view VERSION          = "1.0.0";
-constexpr int              MAX_YEAR         = 9999;
-constexpr int              MAX_MONTH        = 12;
-constexpr int              IMPERIAL_OFFSET  = 1180;  // Imperial = Jalali + 1180
+constexpr std::string_view VERSION = "1.0.0";
 
 // ANSI escape sequences for terminal colors.
 namespace ansi {
 constexpr std::string_view reset   = "\033[0m";
 constexpr std::string_view reverse = "\033[7m";
 constexpr std::string_view bold    = "\033[1m";
-constexpr std::string_view red     = "\033[31m";
 constexpr std::string_view green   = "\033[32m";
 constexpr std::string_view yellow  = "\033[33m";
 constexpr std::string_view blue    = "\033[34m";
@@ -60,70 +46,10 @@ constexpr std::string_view cyan    = "\033[36m";
 // terminals that mishandle LRM can disable this with --no-bidi.
 constexpr std::string_view LRM = "\u200E";
 
-// Latin transliterations of the twelve Persian months.
-constexpr std::array<const char*, 12> MONTHS_EN = {
-    "Farvardin", "Ordibehesht", "Khordad",
-    "Tir",       "Mordad",      "Shahrivar",
-    "Mehr",      "Aban",        "Azar",
-    "Dey",       "Bahman",      "Esfand"
-};
-
-// Persian names of the twelve months.
-constexpr std::array<const char*, 12> MONTHS_FA = {
-    "فروردین", "اردیبهشت", "خرداد",
-    "تیر",     "مرداد",    "شهریور",
-    "مهر",     "آبان",     "آذر",
-    "دی",      "بهمن",     "اسفند"
-};
-
-// Short Latin weekday headers (Shanbeh..Jomeh), modeled after jcal.
-constexpr std::array<const char*, 7> WEEKDAYS_SHORT = {
-    "Sh", "Ye", "Do", "Se", "Ch", "Pa", "Jo"
-};
-
-// Three-letter English weekday abbreviations (Saturday..Friday).
-constexpr std::array<const char*, 7> WEEKDAYS_ABBR_EN = {
-    "Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"
-};
-
-// Single-letter Persian weekday headers.
-constexpr std::array<const char*, 7> WEEKDAYS_FA = {
-    "ش", "ی", "د", "س", "چ", "پ", "ج"
-};
-
-// Full English weekday names (Saturday..Friday).
-constexpr std::array<const char*, 7> WEEKDAYS_FULL_EN = {
-    "Saturday", "Sunday",    "Monday",    "Tuesday",
-    "Wednesday", "Thursday", "Friday"
-};
-
-// Full Persian weekday names.
-constexpr std::array<const char*, 7> WEEKDAYS_FULL_FA = {
-    "شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه",
-    "چهارشنبه", "پنجشنبه", "جمعه"
-};
-
 // =============================================================================
-// Data types
+// Runtime configuration
 // =============================================================================
 
-struct PersianDate {
-    int year  = 0;
-    int month = 0;
-    int day   = 0;
-};
-
-// A date parsed from the command line. `jalali` records whether the
-// input was interpreted as a Jalali or a Gregorian date.
-struct SimpleDate {
-    int  year   = 0;
-    int  month  = 0;
-    int  day    = 0;
-    bool jalali = false;
-    bool valid  = false;
-};
-
-// Runtime configuration collected from command-line flags.
 struct Options {
     int  year          = -1;
     int  month         = -1;
@@ -139,22 +65,8 @@ struct Options {
 };
 
 // =============================================================================
-// Utility functions
+// Terminal width helpers
 // =============================================================================
-
-// Replace ASCII digits in `s` with their Persian counterparts.
-[[nodiscard]] std::string to_persian_digits(std::string_view s) {
-    static constexpr std::array<const char*, 10> digits = {
-        "۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"
-    };
-    std::string out;
-    out.reserve(s.size());
-    for (char c : s) {
-        if (c >= '0' && c <= '9') out += digits[static_cast<size_t>(c - '0')];
-        else                       out += c;
-    }
-    return out;
-}
 
 // Compute the display width of `s`, ignoring ANSI escape sequences and
 // Unicode zero-width control characters. This allows callers to
@@ -166,23 +78,15 @@ struct Options {
     for (size_t i = 0; i < s.size(); ) {
         const auto c = static_cast<unsigned char>(s[i]);
 
-        // Inside an ANSI escape sequence: skip until the terminating 'm'.
         if (in_esc) {
             if (c == 'm') in_esc = false;
             ++i;
             continue;
         }
-        if (c == '\033') {
-            in_esc = true;
-            ++i;
-            continue;
-        }
-
-        // Continuation byte of a UTF-8 sequence.
+        if (c == '\033') { in_esc = true; ++i; continue; }
         if ((c & 0xC0) == 0x80) { ++i; continue; }
 
-        // Zero-width Unicode controls: U+200B..U+200F and U+2060..U+206F,
-        // which include LRM (U+200E) and LRI/PDI (U+2066 / U+2069).
+        // Zero-width Unicode controls: U+200B..U+200F and U+2060..U+206F.
         if (c == 0xE2 && i + 2 < s.size()) {
             const auto b = static_cast<unsigned char>(s[i + 1]);
             const auto d = static_cast<unsigned char>(s[i + 2]);
@@ -191,16 +95,15 @@ struct Options {
         }
 
         ++len;
-        if      ((c & 0x80) == 0x00) i += 1;  // ASCII
-        else if ((c & 0xE0) == 0xC0) i += 2;  // 2-byte UTF-8
-        else if ((c & 0xF0) == 0xE0) i += 3;  // 3-byte UTF-8 (Persian)
-        else if ((c & 0xF8) == 0xF0) i += 4;  // 4-byte UTF-8
-        else                         i += 1;  // Fallback
+        if      ((c & 0x80) == 0x00) i += 1;
+        else if ((c & 0xE0) == 0xC0) i += 2;
+        else if ((c & 0xF0) == 0xE0) i += 3;
+        else if ((c & 0xF8) == 0xF0) i += 4;
+        else                         i += 1;
     }
     return len;
 }
 
-// Right-pad `s` to `width` visible columns.
 [[nodiscard]] std::string pad_visible(std::string_view s, int width) {
     const int v = visible_length(s);
     std::string out(s);
@@ -209,147 +112,19 @@ struct Options {
 }
 
 // =============================================================================
-// Date conversion
-// =============================================================================
-
-// Convert a Jalali date to a Julian Day Number.
-[[nodiscard]] long persian_to_jdn(int year, int month, int day) {
-    const long epbase = year - (year >= 0 ? 474 : 473);
-    const long epyear = 474 + (epbase % 2820);
-    const long m      = (month <= 7)
-        ? static_cast<long>(month - 1) * 31
-        : static_cast<long>(month - 1) * 30 + 6;
-    return day + m
-         + (epyear * 682 - 110) / 2816
-         + (epyear - 1) * 365
-         + (epbase / 2820) * 1029983
-         + 1948320;
-}
-
-// Convert a Julian Day Number to a Jalali date.
-[[nodiscard]] PersianDate jdn_to_persian(long jdn) {
-    const long depoch = jdn - 2121446;
-    const long cycle  = depoch / 1029983;
-    const long cyear  = depoch % 1029983;
-
-    long ycycle = 0;
-    if (cyear == 1029982) {
-        ycycle = 2820;
-    } else {
-        const long aux1 = cyear / 366;
-        const long aux2 = cyear % 366;
-        ycycle = (2134 * aux1 + 2816 * aux2 + 2815) / 1028522 + aux1 + 1;
-    }
-
-    long pyear = ycycle + 2820 * cycle + 474;
-    if (pyear <= 0) --pyear;
-
-    const long yday   = jdn - persian_to_jdn(static_cast<int>(pyear), 1, 1) + 1;
-    const long pmonth = (yday <= 186)
-        ? (yday - 1) / 31 + 1
-        : (yday - 7) / 30 + 1;
-    const long pday   = jdn - persian_to_jdn(static_cast<int>(pyear),
-                                              static_cast<int>(pmonth), 1) + 1;
-
-    return { static_cast<int>(pyear),
-             static_cast<int>(pmonth),
-             static_cast<int>(pday) };
-}
-
-// Convert a boost::gregorian::date to a Jalali date.
-[[nodiscard]] PersianDate to_persian(const bg::date& g) {
-    return jdn_to_persian(g.julian_day());
-}
-
-// Convert a Julian Day Number to a boost::gregorian::date.
-[[nodiscard]] bg::date jdn_to_gregorian(long jdn) {
-    static const bg::date ref(1970, 1, 1);
-    static const long     ref_jdn = ref.julian_day();
-    return ref + bg::days(jdn - ref_jdn);
-}
-
-// Weekday index for a Jalali date: 0 = Shanbeh (Saturday), 6 = Jomeh (Friday).
-[[nodiscard]] int persian_weekday(int year, int month, int day) {
-    return static_cast<int>((persian_to_jdn(year, month, day) + 2) % 7);
-}
-
-// Number of days in a Jalali month, accounting for leap years.
-[[nodiscard]] int persian_month_days(int year, int month) {
-    if (month <= 6)  return 31;
-    if (month <= 11) return 30;
-
-    // Esfand has 29 days in common years and 30 in leap years. The
-    // 33-year cycle contains eight leap years, identified by the
-    // following remainders.
-    const int r = year % 33;
-    return (r == 1 || r == 5 || r == 9  || r == 13 ||
-            r == 17 || r == 22 || r == 26 || r == 30) ? 30 : 29;
-}
-
-// Day of the year (1..365 or 1..366) for a Jalali date.
-[[nodiscard]] int persian_day_of_year(int year, int month, int day) {
-    int doy = 0;
-    for (int m = 1; m < month; ++m) doy += persian_month_days(year, m);
-    return doy + day;
-}
-
-// =============================================================================
-// Date parsing
-// =============================================================================
-
-// Parse a date string. Accepts "YYYY/MM/DD", "YYYY-MM-DD", or "today".
-// Years below 1700 are treated as Jalali; otherwise as Gregorian.
-[[nodiscard]] SimpleDate parse_date(std::string_view s) {
-    SimpleDate out;
-
-    if (s == "today" || s == "now") {
-        const PersianDate p = to_persian(bg::day_clock::local_day());
-        out = { p.year, p.month, p.day, true, true };
-        return out;
-    }
-
-    const auto sep_pos = s.find_first_of("/-");
-    if (sep_pos == std::string_view::npos) return out;
-    const char sep = s[sep_pos];
-
-    std::istringstream ss{ std::string(s) };
-    std::string token;
-    std::vector<int> parts;
-
-    while (std::getline(ss, token, sep)) {
-        try {
-            parts.push_back(std::stoi(token));
-        } catch (...) {
-            return out;
-        }
-    }
-    if (parts.size() != 3) return out;
-
-    out.year   = parts[0];
-    out.month  = parts[1];
-    out.day    = parts[2];
-    out.jalali = (out.year < 1700);
-    out.valid  = true;
-    return out;
-}
-
-// =============================================================================
 // Calendar layout
 // =============================================================================
 
-// Width of a single cell in the calendar grid.
 [[nodiscard]] int cell_width(const Options& opts) {
     const int day_w = opts.julian_day ? 3 : 2;
     const int wd_w  = (!opts.persian && opts.english_names) ? 3 : 2;
     return std::max(day_w, wd_w);
 }
 
-// Total width of one row of a calendar (7 cells plus 6 separators).
 [[nodiscard]] int row_width(const Options& opts) {
     return 7 * cell_width(opts) + 6;
 }
 
-// Render a single month into a vector of lines.
 [[nodiscard]] std::vector<std::string> format_month(int year, int month,
                                                     const Options& opts) {
     std::vector<std::string> lines;
@@ -384,8 +159,6 @@ struct Options {
             static_cast<size_t>(std::max(0, cw - visible_length(name))), ' ');
         cell += name;
 
-        // Wrap each Persian cell in LRM to force LTR rendering, unless
-        // the user explicitly disabled bidi handling via --no-bidi.
         if (opts.persian && !opts.no_bidi) {
             cell = std::string(LRM) + cell + std::string(LRM);
         }
@@ -400,13 +173,13 @@ struct Options {
     // ---- Day numbers ----
     const int first_wd = persian_weekday(year, month, 1);
     const int days     = persian_month_days(year, month);
-    const PersianDate today = to_persian(bg::day_clock::local_day());
-    const bool is_current   = (today.year == year && today.month == month);
+    const PersianDate today = to_persian(
+        boost::gregorian::day_clock::local_day());
+    const bool is_current = (today.year == year && today.month == month);
 
     std::string row;
     int col = 0;
 
-    // Leading blank cells before the first day of the month.
     for (int i = 0; i < first_wd; ++i) {
         row.append(static_cast<size_t>(cw), ' ');
         if (++col < 7) row += ' ';
@@ -425,7 +198,7 @@ struct Options {
             if (opts.color) row += ansi::reverse;
             row += cell;
             if (opts.color) row += ansi::reset;
-        } else if (wd == 6) {  // Friday
+        } else if (wd == 6) {
             if (opts.color) row += ansi::yellow;
             row += cell;
             if (opts.color) row += ansi::reset;
@@ -557,7 +330,7 @@ int cmd_convert(std::string_view arg, const Options& opts) {
     };
 
     if (sd.jalali) {
-        const bg::date g = jdn_to_gregorian(
+        const auto g = jdn_to_gregorian(
             persian_to_jdn(sd.year, sd.month, sd.day));
         const int wd = persian_weekday(sd.year, sd.month, sd.day);
         const char* wdn = opts.persian ? WEEKDAYS_FULL_FA[wd]
@@ -575,11 +348,12 @@ int cmd_convert(std::string_view arg, const Options& opts) {
         std::cout << "Gregorian: ";
         if (opts.color) std::cout << ansi::reset;
         std::cout << g.year() << '-'
-                  << std::setw(2) << std::setfill('0') << g.month().as_number() << '-'
+                  << std::setw(2) << std::setfill('0')
+                  << g.month().as_number() << '-'
                   << std::setw(2) << std::setfill('0') << g.day()
                   << std::setfill(' ') << "\n\n";
     } else {
-        const bg::date g(sd.year, sd.month, sd.day);
+        const boost::gregorian::date g(sd.year, sd.month, sd.day);
         if (g.is_not_a_date()) {
             std::cerr << "Error: invalid Gregorian date.\n";
             return 1;
@@ -616,10 +390,10 @@ int cmd_diff(std::string_view a, std::string_view b, const Options& opts) {
 
     const long j1 = da.jalali
         ? persian_to_jdn(da.year, da.month, da.day)
-        : bg::date(da.year, da.month, da.day).julian_day();
+        : boost::gregorian::date(da.year, da.month, da.day).julian_day();
     const long j2 = db.jalali
         ? persian_to_jdn(db.year, db.month, db.day)
-        : bg::date(db.year, db.month, db.day).julian_day();
+        : boost::gregorian::date(db.year, db.month, db.day).julian_day();
 
     const long diff  = std::abs(j2 - j1);
     const long weeks = diff / 7;
@@ -644,12 +418,15 @@ int cmd_diff(std::string_view a, std::string_view b, const Options& opts) {
     return 0;
 }
 
-// Format the current date and time using a GNU-date-style format string.
+// =============================================================================
+// jdate-style formatting
+// =============================================================================
+
 [[nodiscard]] std::string format_jdate(std::string_view fmt, const Options& opts) {
-    const bg::date     g = bg::day_clock::local_day();
-    const PersianDate  p = to_persian(g);
-    const int          wd = persian_weekday(p.year, p.month, p.day);
-    const int display_year = opts.imperial ? p.year + IMPERIAL_OFFSET : p.year;
+    const auto g  = boost::gregorian::day_clock::local_day();
+    const auto p  = to_persian(g);
+    const int  wd = persian_weekday(p.year, p.month, p.day);
+    const int  display_year = opts.imperial ? p.year + IMPERIAL_OFFSET : p.year;
 
     const std::time_t t  = std::time(nullptr);
     const std::tm*    lt = std::localtime(&t);
@@ -751,11 +528,13 @@ void print_help(const char* prog) {
     cout << "  " << prog << " -c 1405/07/12         # Jalali -> Gregorian\n\n";
 }
 
+} // namespace
+
 // =============================================================================
 // Program entry point
 // =============================================================================
 
-int run(int argc, char* argv[]) {
+int main(int argc, char* argv[]) {
     Options opts;
 
     // Respect the NO_COLOR convention (https://no-color.org).
@@ -823,11 +602,9 @@ int run(int argc, char* argv[]) {
         return cmd_diff(argv[optind], argv[optind + 1], opts);
     }
 
-    // Positional arguments: [month] [year].
     const int remaining = argc - optind;
 
     if (opts.full_year && remaining == 1) {
-        // `-y <year>` — a single positional argument is the year.
         try {
             opts.year = std::stoi(argv[optind]);
         } catch (...) {
@@ -868,7 +645,8 @@ int run(int argc, char* argv[]) {
         }
     }
 
-    const PersianDate today = to_persian(bg::day_clock::local_day());
+    const PersianDate today = to_persian(
+        boost::gregorian::day_clock::local_day());
     const int year  = (opts.year  != -1) ? opts.year  : today.year;
     const int month = (opts.month != -1) ? opts.month : today.month;
 
@@ -877,10 +655,4 @@ int run(int argc, char* argv[]) {
     else                        print_single(opts, year, month);
 
     return 0;
-}
-
-} // namespace
-
-int main(int argc, char* argv[]) {
-    return run(argc, argv);
 }
