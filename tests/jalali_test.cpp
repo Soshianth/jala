@@ -147,6 +147,25 @@ int main() {
         for (const auto& e : evs) CHECK(!e.description.empty());
     }
 
+    // ---- EventIndex: 1405/01/01 has at least one holiday event ----
+    {
+        const EventIndex idx;
+        const auto& evs = idx.events("1405/01/01");
+        CHECK(!evs.empty());
+        bool found_holiday = false;
+        for (const auto& e : evs) {
+            if (e.is_holiday) { found_holiday = true; break; }
+        }
+        CHECK(found_holiday);
+    }
+
+    // ---- EventIndex: a date outside the dataset has no events ----
+    {
+        const EventIndex idx;
+        const auto& evs = idx.events("1399/01/01");
+        CHECK(evs.empty());
+    }
+
     std::cout << "All unit tests passed.\n";
     return 0;
 }

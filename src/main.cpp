@@ -30,7 +30,7 @@ namespace {
 // Constants
 // =============================================================================
 
-constexpr std::string_view VERSION = "1.0.1";
+constexpr std::string_view VERSION = "1.1.0";
 
 // ANSI escape sequences for terminal colors.
 namespace ansi {
@@ -67,6 +67,7 @@ struct Options {
     bool english_names = false;
     bool no_bidi       = false;
     bool show_holidays = true;
+    bool show_events   = false;
 };
 
 // =============================================================================
@@ -239,6 +240,48 @@ struct Options {
     return lines;
 }
 
+// Print a chronological list of all events (holidays and non-holidays)
+// for the given months. Used by the -E/--events flag.
+void print_events(const Options& opts,
+                  const std::vector<std::pair<int,int>>& months) {
+    static const EventIndex events;
+
+    if (opts.color) std::cout << ansi::bold << "Events:" << ansi::reset << "\n";
+    else            std::cout << "Events:\n";
+
+    bool any = false;
+
+    for (const auto& [year, month] : months) {
+        const int days = persian_month_days(year, month);
+
+        for (int d = 1; d <= days; ++d) {
+            const std::string key = format_holiday_key(year, month, d);
+            const auto& evs = events.events(key);
+            if (evs.empty()) continue;
+
+            any = true;
+
+            char buf[24];
+            std::snprintf(buf, sizeof(buf), "%04d/%02d/%02d", year, month, d);
+            const std::string date_str =
+                opts.persian ? to_persian_digits(buf) : std::string(buf);
+
+            for (const auto& e : evs) {
+                std::cout << "  " << date_str << "  ";
+                if (opts.color) {
+                    std::cout << (e.is_holiday ? ansi::red : ansi::cyan);
+                }
+                std::cout << e.description;
+                if (opts.color) std::cout << ansi::reset;
+                std::cout << "\n";
+            }
+        }
+    }
+
+    if (!any) std::cout << "  (no events)\n";
+    std::cout << "\n";
+}
+
 // =============================================================================
 // Output helpers
 // =============================================================================
@@ -247,6 +290,10 @@ void print_single(const Options& opts, int year, int month) {
     for (const auto& line : format_month(year, month, opts))
         std::cout << line << '\n';
     std::cout << '\n';
+
+    if (opts.show_events) {
+        print_events(opts, {{year, month}});
+    }
 }
 
 void print_columns(const Options& opts,
@@ -276,6 +323,9 @@ void print_columns(const Options& opts,
         }
         while (!line.empty() && line.back() == ' ') line.pop_back();
         std::cout << line << '\n';
+    }
+    if (opts.show_events) {
+        print_events(opts, months);
     }
     std::cout << '\n';
 }
@@ -533,6 +583,7 @@ void print_help(const char* prog) {
     cout << "  -d, --diff    Difference in days between two dates\n";
     cout << "  -B, --no-bidi Do not wrap Persian weekday cells in LRM\n";
     cout << "  -H, --no-holidays  Do not highlight Iranian holidays\n";
+    cout << "  -E, --events       List all events after the calendar\n";
     cout << "  -n            No color\n";
     cout << "  -h            Show this help\n";
     cout << "  -v            Show version\n\n";
@@ -576,6 +627,7 @@ int main(int argc, char* argv[]) {
         {"pahlavi",     no_argument,       nullptr, 'P'},
         {"no-bidi",     no_argument,       nullptr, 'B'},
         {"no-holidays", no_argument,       nullptr, 'H'},
+        {"events",      no_argument,       nullptr, 'E'},
         {"nocolor",     no_argument,       nullptr, 'n'},
         {"help",        no_argument,       nullptr, 'h'},
         {"version",     no_argument,       nullptr, 'v'},
@@ -589,7 +641,7 @@ int main(int argc, char* argv[]) {
     std::string today_fmt;
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "c:dty3spejPBNHnhv",
+    while ((opt = getopt_long(argc, argv, "c:dty3spejPBNHnEhv",
                               long_opts, nullptr)) != -1) {
         switch (opt) {
             case 'c': do_convert = true; convert_arg = optarg; break;
@@ -604,6 +656,7 @@ int main(int argc, char* argv[]) {
             case 'P': opts.imperial      = true; break;
             case 'B': opts.no_bidi       = true; break;
             case 'H': opts.show_holidays = false; break;
+            case 'E': opts.show_events   = true;  break;
             case 'n': opts.color         = false; break;
             case 'h': print_help(argv[0]); return 0;
             case 'v': std::cout << "jala " << VERSION << '\n'; return 0;
