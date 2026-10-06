@@ -84,8 +84,8 @@ test-unit: $(TEST_BIN)
 
 # The unit tests link against jalali.cpp directly, with no dependency on
 # main.cpp or the CLI. They run in a few milliseconds.
-$(TEST_BIN): $(TEST_SRC) $(SRCDIR)/jalali.cpp $(HDRS)
-	$(CXX) $(CXXFLAGS) -o $@ $(TEST_SRC) $(SRCDIR)/jalali.cpp $(LDFLAGS) $(LDLIBS)
+$(TEST_BIN): $(TEST_SRC) $(SRCDIR)/jalali.cpp $(SRCDIR)/holidays.cpp $(HDRS)
+	$(CXX) $(CXXFLAGS) -o $@ $(TEST_SRC) $(SRCDIR)/jalali.cpp $(SRCDIR)/holidays.cpp $(LDFLAGS) $(LDLIBS)
 
 # -----------------------------------------------------------------------------
 # Housekeeping

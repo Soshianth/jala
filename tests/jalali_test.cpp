@@ -10,6 +10,7 @@
 // =============================================================================
 
 #include "jalali.hpp"
+#include "holidays.hpp"
 
 #include <cassert>
 #include <iostream>
@@ -125,6 +126,25 @@ int main() {
         CHECK(to_persian_digits("1405") == "۱۴۰۵");
         CHECK(to_persian_digits("abc") == "abc");
         CHECK(to_persian_digits("")    == "");
+    }
+
+    // ---- HolidayIndex ----
+    {
+        const HolidayIndex idx;
+        CHECK(idx.size() > 0);
+        CHECK(idx.contains("1405/01/01"));
+        CHECK(!idx.name("1405/01/01").empty());
+        CHECK(!idx.contains("1404/01/01"));  // wrong year
+    }
+
+    // ---- EventIndex ----
+    {
+        const EventIndex idx;
+        CHECK(idx.size() > 0);
+        const auto& evs = idx.events("1405/01/01");
+        CHECK(!evs.empty());
+        // Every event has a non-empty description.
+        for (const auto& e : evs) CHECK(!e.description.empty());
     }
 
     std::cout << "All unit tests passed.\n";
