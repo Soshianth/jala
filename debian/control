@@ -1,15 +1,15 @@
 Source: jala
 Section: utils
 Priority: optional
-Maintainer: Alireza <mahdymorady@users.noreply.github.com>
+Maintainer: Alireza <Soshianth@users.noreply.github.com>
 Build-Depends: debhelper-compat (= 13),
                g++,
                libboost-date-time-dev
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
-Homepage: https://github.com/mahdymorady/jala
-Vcs-Git: https://github.com/mahdymorady/jala.git
-Vcs-Browser: https://github.com/mahdymorady/jala
+Homepage: https://github.com/Soshianth/jala
+Vcs-Git: https://github.com/Soshianth/jala.git
+Vcs-Browser: https://github.com/Soshianth/jala
 
 Package: jala
 Architecture: any

@@ -1,0 +1,10 @@
+[project]
+name = "jala-tools"
+version = "0.1.0"
+description = "Python tooling for the jala project (data generation)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv]
+package = false
