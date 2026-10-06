@@ -5,7 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2026-10-06
+
+### Added
+
+- `-E`, `--events`: after the calendar, print every event recorded
+  for the displayed range. Holidays appear in red, other events in
+  cyan. Composes with `-p` for Persian digits and `-n` to disable
+  color.
+- `-H`, `--no-holidays`: disable highlighting of Iranian official
+  holidays.
+- Holiday and event data sourced from
+  [hasan-ahani/shamsi-holidays](https://github.com/hasan-ahani/shamsi-holidays)
+  (MIT License) and embedded into the binary at build time.
+- `scripts/embed_holidays.py` regenerates two C++ tables,
+  `HOLIDAYS[]` and `EVENTS[]`, from `data/holidays.json`.
+
+### Changed
+
+- Python tooling is managed with
+  [uv](https://github.com/astral-sh/uv);
+  `pyproject.toml`, `uv.lock`, and `.python-version` are now tracked.
+- The repository moved from `mahdymorady/jala` to `Soshianth/jala`.
+- Unit-test target now links against `src/holidays.cpp`.
+
 
 ## [1.0.1] - 2026-10-05
 
@@ -86,5 +109,6 @@ First stable release.
 - `-y` with a single numeric argument now correctly treats it as the
   year rather than the month
 
-[Unreleased]: https://github.com/Soshianth/jala/compare/v1.0.1...main
+[Unreleased]: https://github.com/Soshianth/jala/compare/v1.1.0...main
+[1.1.0]: https://github.com/Soshianth/jala/compare/v1.0.1...v1.1.0
 [1.0.0]: https://github.com/Soshianth/jala/releases/tag/v1.0.0
