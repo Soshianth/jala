@@ -2,7 +2,7 @@
 .\" Copyright (c) 2026 Alireza
 .\" SPDX-License-Identifier: MIT
 .\"
-.TH JALA 1 "October 2026" "jala 1.0.1" "User Commands"
+.TH JALA 1 "October 2026" "jala 1.1.0" "User Commands"
 .SH NAME
 jala \- display a Persian (Jalali) calendar in the terminal
 .SH SYNOPSIS
@@ -31,23 +31,20 @@ It can display a single month, three consecutive months, or a full
 year; it can highlight today, mark Fridays, render Persian digits
 and month names, show the day-of-year, use the Imperial
 (Shahanshahi) year, convert dates between the Jalali and Gregorian
-calendars, and compute the difference between two dates.
+calendars, compute the difference between two dates, and highlight
+Iranian official holidays from an embedded dataset.
 .PP
 The Gregorian-to-Jalali conversion is implemented with the standard
 JDN (Julian Day Number) algorithm and is accurate across the entire
 supported range (years 1 to 9999).
 .SH OPTIONS
 .TP
-.BR \-1
-Print the current month only. This is the default behavior when no
-other output mode is requested.
+.BR \-y
+Print the full year as a 3 columns \(mu 4 rows grid.
 .TP
 .BR \-3
 Print three months side by side: the previous month, the current
 (or requested) month, and the next month.
-.TP
-.BR \-y
-Print the full year as a 3 columns \(mu 4 rows grid.
 .TP
 .BR \-s ", " \-\-stacked
 Print months in a single column instead of side by side. Useful
@@ -59,8 +56,9 @@ when the terminal is narrow.
 .TP
 .BR \-p ", " \-\-persian
 Render digits and month/weekday names in Persian. Each weekday
-header cell is wrapped in Unicode LRI/PDI markers so the column
-stays left-to-right regardless of the terminal's bidi handling.
+header cell is wrapped in Unicode LRM (Left-to-Right Mark) so the
+column stays left-to-right regardless of the terminal's bidi
+handling.
 .TP
 .BR \-e ", " \-\-english
 Print three-letter English weekday abbreviations
@@ -107,6 +105,24 @@ format string (see
 below). The leading
 .B +
 is optional.
+.TP
+.BR \-B ", " \-\-no-bidi
+Do not wrap Persian weekday cells in the Unicode LRM marker. Use
+this on terminals that render the marker as a visible control
+character or that otherwise mishandle bidi controls.
+.TP
+.BR \-H ", " \-\-no-holidays
+Do not highlight Iranian official holidays. By default, days listed
+in the embedded holiday dataset are printed in red.
+.TP
+.BR \-E ", " \-\-events
+After printing the calendar, list every event recorded for the
+displayed range, one per line. Holidays are shown in red, other
+events in cyan. Combine with
+.B \-p
+for Persian digits and with
+.B \-n
+to disable color.
 .TP
 .BR \-n ", " \-\-nocolor
 Disable ANSI color output. Useful when piping the output to a file
@@ -226,6 +242,16 @@ Print the current date and time.
 Print the current date with Persian names, for example
 .IR "یکشنبه ۱۲ مهر ۱۴۰۵" .
 .TP
+.B jala \-E 1 1405
+Show Farvardin 1405 and list every event recorded in that month.
+.TP
+.B jala \-H 1 1405
+Show Farvardin 1405 without highlighting official holidays.
+.TP
+.B jala \-B \-p
+Show the current month in Persian, without LRM wrapping around the
+weekday header. Useful on terminals that render LRM visibly.
+.TP
 .B jala \-c 1405/07/12
 Convert 1405/07/12 (Jalali) to Gregorian.
 .TP
@@ -250,6 +276,10 @@ If set to any non-empty value, color output is disabled, matching
 the informal
 .B NO_COLOR
 convention.
+.SH FILES
+.TP
+.B /usr/bin/jala
+The executable.
 .SH "SEE ALSO"
 .BR jcal (1),
 .BR jdate (1),
@@ -260,8 +290,18 @@ Written by Mahdi Moradi.
 .SH BUGS
 Report bugs at the project's issue tracker.
 .PP
+Holiday and event data is sourced from
+.UR https://github.com/hasan-ahani/shamsi-holidays
+hasan-ahani/shamsi-holidays
+.UE
+(MIT License) and embedded at build time. Updates require a new
+release of
+.BR jala .
+.PP
 Persian text alignment in the terminal depends on the font and on
 the terminal's support for bidi control characters. If the weekday
-header appears reversed, try a terminal that supports LRI/PDI
-(for example, recent versions of GNOME Terminal, Konsole, or
-Alacritty).
+header appears reversed, try a terminal that supports LRM (for
+example, recent versions of GNOME Terminal, Konsole, or Alacritty),
+or pass
+.B \-B
+to disable the marker.
