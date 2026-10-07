@@ -5,6 +5,17 @@ Source: https://github.com/Soshianth/jala
 Files: *
 Copyright: 2026 Mahdi Moradi <Soshianth@users.noreply.github.com>
 License: MIT
+
+Files: data/holidays.json
+       src/holidays_data.hpp
+Copyright: 2026 Hassan Ahani
+License: MIT
+Comment: Holiday and event data for the Iranian calendar, derived
+ from https://github.com/hasan-ahani/shamsi-holidays (MIT licensed).
+ The file src/holidays_data.hpp is auto-generated from
+ data/holidays.json by scripts/embed_holidays.py.
+
+License: MIT
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
  in the Software without restriction, including without limitation the rights
