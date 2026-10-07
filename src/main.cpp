@@ -424,7 +424,18 @@ int cmd_convert(std::string_view arg, const Options& opts) {
                   << std::setw(2) << std::setfill('0') << g.day()
                   << std::setfill(' ') << "\n\n";
     } else {
-        const boost::gregorian::date g(sd.year, sd.month, sd.day);
+        // Constructing a boost::gregorian::date can throw if any
+        // component is out of range. parse_date() has already
+        // validated the input, but we keep the guard for defense
+        // in depth and to produce a clean error message.
+        boost::gregorian::date g;
+        try {
+            g = boost::gregorian::date(sd.year, sd.month, sd.day);
+        } catch (const std::exception& e) {
+            std::cerr << "Error: invalid Gregorian date: "
+                      << e.what() << "\n";
+            return 1;
+        }
         if (g.is_not_a_date()) {
             std::cerr << "Error: invalid Gregorian date.\n";
             return 1;
@@ -459,12 +470,23 @@ int cmd_diff(std::string_view a, std::string_view b, const Options& opts) {
     if (!da.valid) { std::cerr << "Error: invalid date '" << a << "'\n"; return 1; }
     if (!db.valid) { std::cerr << "Error: invalid date '" << b << "'\n"; return 1; }
 
-    const long j1 = da.jalali
-        ? persian_to_jdn(da.year, da.month, da.day)
-        : boost::gregorian::date(da.year, da.month, da.day).julian_day();
-    const long j2 = db.jalali
-        ? persian_to_jdn(db.year, db.month, db.day)
-        : boost::gregorian::date(db.year, db.month, db.day).julian_day();
+    // Convert each date to a JDN. Gregorian dates may throw if the
+    // input is out of range; parse_date() has already validated
+    // them, but we catch exceptions anyway to produce a clean error.
+    long j1 = 0;
+    long j2 = 0;
+    try {
+        j1 = da.jalali
+            ? persian_to_jdn(da.year, da.month, da.day)
+            : boost::gregorian::date(da.year, da.month, da.day).julian_day();
+        j2 = db.jalali
+            ? persian_to_jdn(db.year, db.month, db.day)
+            : boost::gregorian::date(db.year, db.month, db.day).julian_day();
+    } catch (const std::exception& e) {
+        std::cerr << "Error: could not convert date: "
+                  << e.what() << "\n";
+        return 1;
+    }
 
     const long diff  = std::abs(j2 - j1);
     const long weeks = diff / 7;
@@ -607,7 +629,7 @@ void print_help(const char* prog) {
 // Program entry point
 // =============================================================================
 
-int main(int argc, char* argv[]) {
+[[nodiscard]] int run(int argc, char* argv[]) {
     Options opts;
 
     // Respect the NO_COLOR convention (https://no-color.org).
@@ -733,4 +755,16 @@ int main(int argc, char* argv[]) {
     else                        print_single(opts, year, month);
 
     return 0;
+}
+
+int main(int argc, char* argv[]) {
+    try {
+        return run(argc, argv);
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << "\n";
+        return 1;
+    } catch (...) {
+        std::cerr << "Error: unknown exception\n";
+        return 1;
+    }
 }
