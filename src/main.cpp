@@ -5,6 +5,8 @@
 
 #include "jalali.hpp"
 #include "holidays.hpp"
+#include <wchar.h>
+#include <wctype.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -85,40 +87,58 @@ struct Options {
 // Terminal width helpers
 // =============================================================================
 
-// Compute the display width of `s`, ignoring ANSI escape sequences and
-// Unicode zero-width control characters. This allows callers to
-// right-pad or measure colored strings correctly.
+// Compute the display width of `s` in terminal columns.
+//
+// This is more accurate than counting code points: it uses wcwidth()
+// to ask the C library for the column width of each wide character,
+// so CJK (width 2) and combining marks (width 0) are handled
+// correctly. ANSI escape sequences are skipped.
+//
+// The conversion is done with mbrtowc() using the current locale,
+// which the program is expected to have set up via setlocale() in
+// main().
 [[nodiscard]] int visible_length(std::string_view s) {
-    int  len    = 0;
+    int  width  = 0;
     bool in_esc = false;
+
+    // Save and reset the conversion state for each call, since the
+    // same buffer may be reused across calls.
+    std::mbstate_t state{};
 
     for (size_t i = 0; i < s.size(); ) {
         const auto c = static_cast<unsigned char>(s[i]);
 
+        // Skip ANSI escape sequences entirely.
         if (in_esc) {
             if (c == 'm') in_esc = false;
             ++i;
             continue;
         }
         if (c == '\033') { in_esc = true; ++i; continue; }
-        if ((c & 0xC0) == 0x80) { ++i; continue; }
 
-        // Zero-width Unicode controls: U+200B..U+200F and U+2060..U+206F.
-        if (c == 0xE2 && i + 2 < s.size()) {
-            const auto b = static_cast<unsigned char>(s[i + 1]);
-            const auto d = static_cast<unsigned char>(s[i + 2]);
-            if (b == 0x80 && d >= 0x8B && d <= 0x8F) { i += 3; continue; }
-            if (b == 0x81 && d >= 0xA0 && d <= 0xAF) { i += 3; continue; }
+        // Decode one multibyte character.
+        wchar_t wc = 0;
+        const size_t len = std::mbrtowc(&wc, s.data() + i,
+                                        s.size() - i, &state);
+        if (len == static_cast<size_t>(-1) ||
+            len == static_cast<size_t>(-2)) {
+            // Invalid or incomplete sequence: skip one byte.
+            std::memset(&state, 0, sizeof(state));
+            ++i;
+            continue;
         }
+        if (len == 0) break;  // embedded NUL
 
-        ++len;
+        i += len;
 
-        if      ((c & 0xE0) == 0xC0) i += 2;  // 2-byte UTF-8
-        else if ((c & 0xF0) == 0xE0) i += 3;  // 3-byte UTF-8
-        else if ((c & 0xF8) == 0xF0) i += 4;  // 4-byte UTF-8
-        else                         i += 1;  // ASCII or invalid byte
+        // Determine the cell width of this character.
+        const int w = ::wcwidth(wc);
+        if (w > 0) {
+            width += w;
+        }
+        // w < 0 means a non-printable character; we count it as 0.
     }
-    return len;
+    return width;
 }
 
 [[nodiscard]] std::string pad_visible(std::string_view s, int width) {
@@ -827,6 +847,14 @@ void print_help(const char* prog, bool use_color) {
 }  // namespace
 
 int main(int argc, char* argv[]) {
+    // Set the locale for the current environment so that wcwidth()
+    // and mbrtowc() interpret UTF-8 correctly. If the environment
+    // does not specify a locale, fall back to the C.UTF-8 locale,
+    // which is guaranteed to be UTF-8 on modern glibc systems.
+    if (std::setlocale(LC_ALL, "") == nullptr) {
+        std::setlocale(LC_ALL, "C.UTF-8");
+    }
+
     try {
         return run(argc, argv);
     } catch (const std::exception& e) {
