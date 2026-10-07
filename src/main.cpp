@@ -166,8 +166,23 @@ struct Options {
     lines.push_back(std::move(title_line));
 
     // ---- Weekday header ----
+    // In Persian mode, the weekday cells are single RTL letters. A
+    // bidi-aware terminal will render a run of such letters right-
+    // to-left, which would reverse the visual order of the header
+    // relative to the numeric cells below.
+    //
+    // With LRM (the default), each cell is wrapped in a pair of LRM
+    // markers, forcing the terminal to treat each cell as LTR. With
+    // --no-bidi, we do not insert LRM; to keep the visual order
+    // correct we instead emit the cells in reverse order, so that
+    // the terminal's own RTL rendering turns them back into the
+    // intended left-to-right sequence.
+    const bool reverse_header = opts.persian && opts.no_bidi;
+
     std::string header;
-    for (int i = 0; i < 7; ++i) {
+    for (int k = 0; k < 7; ++k) {
+        const int i = reverse_header ? (6 - k) : k;
+
         const char* name = opts.persian       ? WEEKDAYS_FA[i]
                          : opts.english_names ? WEEKDAYS_ABBR_EN[i]
                                               : WEEKDAYS_SHORT[i];
@@ -184,7 +199,7 @@ struct Options {
         if (opts.color) header += ansi::blue;
         header += cell;
         if (opts.color) header += ansi::reset;
-        if (i < 6) header += ' ';
+        if (k < 6) header += ' ';
     }
     lines.push_back(std::move(header));
 
