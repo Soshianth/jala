@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-10-07
+
+### Added
+
+- `--color=WHEN` (`always`, `never`, `auto`). The default, `auto`,
+  emits ANSI colors only when stdout is a terminal and `NO_COLOR`
+  is unset. `always` overrides `NO_COLOR`, and `never` disables
+  color unconditionally. The existing `-n` / `--nocolor` flag now
+  behaves as `--color=never`.
+- `persian_is_leap()` as the single source of truth for leap
+  years, documented in the public header.
+- Unit tests covering leap-year consistency between
+  `persian_month_days()` and `persian_to_jdn()`, strict input
+  validation in `parse_date()`, and `EventIndex` lookups.
+
+### Changed
+
+- The calendar engine now uses the 33-year cycle exclusively.
+  Previously `persian_to_jdn()` and `jdn_to_persian()` used the
+  2820-year Birashk cycle while `persian_month_days()` used the
+  33-year cycle, and the two disagreed about leap years in some
+  years (e.g. Esfand 1403, 1404, 1436, 1437, 1469, 1470). All
+  conversion and arithmetic now agree, and the results match the
+  official Iranian calendar for the modern era.
+- `parse_date()` validates its input strictly: each numeric
+  component must be a complete integer, the month and day must be
+  in range, and Jalali dates must exist in the 33-year cycle.
+- `visible_length()` uses `wcwidth()` and `mbrtowc()` instead of
+  counting UTF-8 code points, so CJK characters (two columns) and
+  combining marks (zero columns) are measured correctly.
+  `setlocale(LC_ALL, "")` is called once at startup, with a
+  fallback to `C.UTF-8`.
+- `debian/rules` preserves the distribution's build flags by
+  including `/usr/share/dpkg/default.mk` and appending project
+  flags to `CXXFLAGS` instead of replacing them.
+- `debian/copyright` separates the main source code from the
+  holiday dataset, which is derived from
+  hasan-ahani/shamsi-holidays (MIT, Copyright Hassan Ahani).
+
+### Fixed
+
+- `parse_date()` no longer accepts malformed input such as
+  `1405/07/12xyz`, `1405/13/01`, `1405/12/30` in a non-leap year,
+  or `2026-02-30`.
+- `--no-bidi` in combination with `-p` no longer reverses the
+  visual order of the weekday header. The cells are emitted in
+  reverse order so that the terminal's own right-to-left rendering
+  restores the intended left-to-right sequence.
+- Exceptions thrown by `boost::gregorian::date` are caught in
+  `cmd_convert()` and `cmd_diff()` and reported as one-line error
+  messages instead of terminating the process. A top-level
+  `try/catch` in `main()` reports any remaining exception.
+- The obsolete monolithic `jala.cpp` at the repository root has
+  been removed; the sources now live under `src/`.
+
+[1.2.0]: https://github.com/Soshianth/jala/compare/v1.1.0...v1.2.0
+
 ## [1.1.0] - 2026-10-06
 
 ### Added
@@ -109,6 +166,6 @@ First stable release.
 - `-y` with a single numeric argument now correctly treats it as the
   year rather than the month
 
-[Unreleased]: https://github.com/Soshianth/jala/compare/v1.1.0...main
+[Unreleased]: https://github.com/Soshianth/jala/compare/v1.2.0...main
 [1.1.0]: https://github.com/Soshianth/jala/compare/v1.0.1...v1.1.0
 [1.0.0]: https://github.com/Soshianth/jala/releases/tag/v1.0.0
