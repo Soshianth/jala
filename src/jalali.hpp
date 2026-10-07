@@ -132,7 +132,18 @@ inline constexpr std::array<const char*, 7> WEEKDAYS_FULL_FA = {
 // =============================================================================
 
 // Parse a date string. Accepts "YYYY/MM/DD", "YYYY-MM-DD", or "today".
+//
 // Years below 1700 are treated as Jalali; otherwise as Gregorian.
+//
+// A date is considered valid only if:
+//   - each numeric component is a complete, well-formed integer
+//     (no trailing characters),
+//   - the month is in [1, 12],
+//   - the day is in [1, days_in_month(year, month)],
+//   - for Gregorian dates, the date exists (e.g. February 30 is
+//     rejected).
+//
+// On any failure, the returned SimpleDate has valid == false.
 [[nodiscard]] SimpleDate parse_date(std::string_view s);
 
 // Replace ASCII digits in `s` with their Persian counterparts.
