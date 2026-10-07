@@ -114,11 +114,54 @@ int main() {
         CHECK(d.jalali);
     }
 
-    // ---- parse_date: invalid input ----
+    // ---- parse_date: valid Jalali inputs ----
+    {
+        CHECK(parse_date("1405/07/12").valid);
+        CHECK(parse_date("1405-07-12").valid);
+        CHECK(parse_date("1403/12/30").valid);  // leap year
+        CHECK(parse_date("today").valid);
+        CHECK(parse_date("now").valid);
+    }
+
+    // ---- parse_date: valid Gregorian inputs ----
+    {
+        CHECK(parse_date("2026-10-04").valid);
+        CHECK(parse_date("2024-02-29").valid);  // Gregorian leap year
+    }
+
+    // ---- parse_date: malformed numbers ----
     {
         CHECK(!parse_date("garbage").valid);
-        CHECK(!parse_date("1405").valid);
-        CHECK(!parse_date("1405/07").valid);
+        CHECK(!parse_date("").valid);
+        CHECK(!parse_date("1405").valid);           // one component
+        CHECK(!parse_date("1405/07").valid);        // two components
+        CHECK(!parse_date("1405/07/12/13").valid);  // four components
+        CHECK(!parse_date("1405//12").valid);       // empty component
+        CHECK(!parse_date("1405/07/12xyz").valid);  // trailing chars
+        CHECK(!parse_date("1405/0x7/12").valid);    // hex-like
+        CHECK(!parse_date("14O5/07/12").valid);     // letter O
+    }
+
+    // ---- parse_date: out-of-range Jalali fields ----
+    {
+        CHECK(!parse_date("1405/00/12").valid);  // month 0
+        CHECK(!parse_date("1405/13/12").valid);  // month 13
+        CHECK(!parse_date("1405/07/00").valid);  // day 0
+        CHECK(!parse_date("1405/07/32").valid);  // >31
+        CHECK(!parse_date("1405/08/31").valid);  // 30-day month
+        CHECK(!parse_date("1405/12/30").valid);  // non-leap Esfand
+        CHECK(!parse_date("1403/12/31").valid);  // >30 in leap Esfand
+        CHECK(!parse_date("0/01/01").valid);     // year 0
+    }
+
+    // ---- parse_date: out-of-range Gregorian fields ----
+    {
+        CHECK(!parse_date("2026-02-30").valid);  // Feb 30
+        CHECK(!parse_date("2025-02-29").valid);  // non-leap Feb 29
+        CHECK(!parse_date("2026-04-31").valid);  // April has 30 days
+        CHECK(!parse_date("2026-13-01").valid);  // month 13
+        CHECK(!parse_date("2026-00-01").valid);  // month 0
+        CHECK(!parse_date("2026-01-00").valid);  // day 0
     }
 
     // ---- to_persian_digits ----

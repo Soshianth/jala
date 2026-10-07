@@ -196,10 +196,16 @@ boost::gregorian::date jdn_to_gregorian(long jdn) {
 //
 // The separator is chosen by the first '/' or '-' found in the
 // input. A year below 1700 is treated as Jalali; otherwise as
-// Gregorian. Invalid input returns a SimpleDate with valid = false.
+// Gregorian.
+//
+// The parser is strict: every numeric component must be a complete
+// integer with no trailing characters, and the resulting date must
+// exist in its respective calendar. On any failure, the returned
+// SimpleDate has valid == false.
 SimpleDate parse_date(std::string_view s) {
     SimpleDate out;
 
+    // Special keyword: the current date.
     if (s == "today" || s == "now") {
         const PersianDate p = to_persian(
             boost::gregorian::day_clock::local_day());
@@ -207,17 +213,25 @@ SimpleDate parse_date(std::string_view s) {
         return out;
     }
 
+    // The separator is whichever of '/' or '-' appears first.
     const auto sep_pos = s.find_first_of("/-");
     if (sep_pos == std::string_view::npos) return out;
     const char sep = s[sep_pos];
 
+    // Split the input into three components. An empty component or a
+    // component that is not a full integer causes an early return
+    // with valid == false.
+    std::vector<int> parts;
     std::istringstream ss{ std::string(s) };
     std::string token;
-    std::vector<int> parts;
-
     while (std::getline(ss, token, sep)) {
+        if (token.empty()) return out;
         try {
-            parts.push_back(std::stoi(token));
+            std::size_t pos = 0;
+            const int value = std::stoi(token, &pos);
+            // std::stoi accepts trailing garbage unless we check pos.
+            if (pos != token.size()) return out;
+            parts.push_back(value);
         } catch (...) {
             return out;
         }
@@ -228,7 +242,29 @@ SimpleDate parse_date(std::string_view s) {
     out.month  = parts[1];
     out.day    = parts[2];
     out.jalali = (out.year < 1700);
-    out.valid  = true;
+
+    // Calendar-specific validation.
+    if (out.jalali) {
+        // Jalali: year >= 1, month in [1, 12], and day within the
+        // length of that month (which itself depends on leap years).
+        if (out.year < 1) return out;
+        if (out.month < 1 || out.month > 12) return out;
+
+        const int max_day = persian_month_days(out.year, out.month);
+        if (out.day < 1 || out.day > max_day) return out;
+    } else {
+        // Gregorian: let Boost decide. The date constructor throws
+        // on invalid input such as 2026-02-30, which we translate
+        // into valid == false.
+        try {
+            boost::gregorian::date g(out.year, out.month, out.day);
+            (void)g;
+        } catch (const std::exception&) {
+            return out;
+        }
+    }
+
+    out.valid = true;
     return out;
 }
 
