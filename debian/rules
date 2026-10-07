@@ -1,16 +1,26 @@
 #!/usr/bin/make -f
 
+# Pull in the distribution's default build flags (CXXFLAGS, CPPFLAGS,
+# LDFLAGS) plus the hardening flags. The "+bindnow" option adds
+# -Wl,-z,now to LDFLAGS, enabling immediate binding.
+include /usr/share/dpkg/default.mk
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+bindnow
+
+# Use the Makefile build system.
 %:
-	dh $@
+	dh $@ --buildsystem=makefile
 
+# Build the project with:
+#   - CPPFLAGS from dpkg-buildflags (which contains -D_FORTIFY_SOURCE=3)
+#   - CXXFLAGS from dpkg-buildflags plus our project-specific flags
 override_dh_auto_build:
-	$(MAKE) CXXFLAGS="-std=c++17 -O2 -Wall -Wextra" all
+	$(MAKE) CPPFLAGS="$(CPPFLAGS)" CXXFLAGS="$(CXXFLAGS) -std=c++17 -Wall -Wextra"
 
+# Install via the Makefile, honouring DESTDIR and PREFIX.
 override_dh_auto_install:
 	$(MAKE) install DESTDIR=$(CURDIR)/debian/jala PREFIX=/usr
 
-override_dh_auto_clean:
-	$(MAKE) clean
-
+# Run the test suite during the build.
 override_dh_auto_test:
 	$(MAKE) test
