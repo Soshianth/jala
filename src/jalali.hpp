@@ -117,6 +117,10 @@ inline constexpr std::array<const char*, 7> WEEKDAYS_FULL_FA = {
 // Weekday index for a Jalali date: 0 = Shanbeh (Saturday), 6 = Jomeh.
 [[nodiscard]] int persian_weekday(int year, int month, int day);
 
+// Returns true if `year` is a leap year in the Jalali calendar.
+// A leap year has 366 days; Esfand has 30 days instead of 29.
+[[nodiscard]] bool persian_is_leap(int year);
+
 // Number of days in a Jalali month, accounting for leap years.
 [[nodiscard]] int persian_month_days(int year, int month);
 

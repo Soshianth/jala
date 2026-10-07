@@ -166,6 +166,31 @@ int main() {
         CHECK(evs.empty());
     }
 
+    // ---- leap-year consistency: persian_month_days agrees with JDN ----
+    // For every month of every year in a wide range, the day count
+    // computed by persian_month_days must equal the JDN difference
+    // between the first of the month and the first of the next month.
+    {
+        for (int y = 1300; y <= 1500; ++y) {
+            for (int m = 1; m <= 12; ++m) {
+                const long j1 = persian_to_jdn(y, m, 1);
+
+                int nm = m + 1;
+                int ny = y;
+                if (nm > 12) { nm = 1; ++ny; }
+                const long j2 = persian_to_jdn(ny, nm, 1);
+
+                const int expected = static_cast<int>(j2 - j1);
+                if (persian_month_days(y, m) != expected) {
+                    std::cerr << "Mismatch at " << y << "/" << m
+                              << ": month_days=" << persian_month_days(y, m)
+                              << ", JDN diff=" << expected << "\n";
+                    return 1;
+                }
+            }
+        }
+    }
+
     std::cout << "All unit tests passed.\n";
     return 0;
 }
