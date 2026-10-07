@@ -44,6 +44,16 @@ constexpr std::string_view cyan    = "\033[36m";
 constexpr std::string_view red     = "\033[31m";
 } // namespace ansi
 
+// Controls when ANSI colors are emitted.
+//   Auto   — colors only when stdout is a TTY (default).
+//   Always — colors are always emitted, even when piped or redirected.
+//   Never  — colors are never emitted.
+enum class ColorMode {
+    Auto,
+    Always,
+    Never,
+};
+
 // Unicode Left-to-Right Mark (U+200E). Wrapping a Persian weekday
 // cell in LRM forces bidi-aware terminals to render it left-to-right,
 // keeping the header aligned with the numeric cells below. Users on
@@ -68,6 +78,7 @@ struct Options {
     bool no_bidi       = false;
     bool show_holidays = true;
     bool show_events   = false;
+    ColorMode color_mode = ColorMode::Auto;
 };
 
 // =============================================================================
@@ -582,17 +593,24 @@ int cmd_today(std::string_view fmt_arg, const Options& opts) {
 // Help text
 // =============================================================================
 
-void print_help(const char* prog) {
+// Print the command-line help. When `use_color` is false, all ANSI
+// escape sequences are omitted, so the output stays readable in a
+// pipe or with NO_COLOR set.
+void print_help(const char* prog, bool use_color) {
     using std::cout;
+
+    const auto B = use_color ? ansi::bold  : std::string_view{};
+    const auto R = use_color ? ansi::reset : std::string_view{};
+
     cout << '\n';
-    cout << ansi::bold << "jala " << VERSION << ansi::reset
+    cout << B << "jala " << VERSION << R
          << " — Persian calendar in the terminal\n\n";
-    cout << ansi::bold << "Usage:" << ansi::reset << "\n";
+    cout << B << "Usage:" << R << "\n";
     cout << "  " << prog << " [options] [month] [year]\n";
     cout << "  " << prog << " -c <date>          # convert date\n";
     cout << "  " << prog << " -d <date1> <date2> # diff two dates\n";
     cout << "  " << prog << " -t [+FORMAT]       # current date & time\n\n";
-    cout << ansi::bold << "Options:" << ansi::reset << "\n";
+    cout << B << "Options:" << R << "\n";
     cout << "  -y            Show full year (3-column grid)\n";
     cout << "  -3            Show three months side by side\n";
     cout << "  -s            Stacked mode (single column)\n";
@@ -606,15 +624,17 @@ void print_help(const char* prog) {
     cout << "  -B, --no-bidi Do not wrap Persian weekday cells in LRM\n";
     cout << "  -H, --no-holidays  Do not highlight Iranian holidays\n";
     cout << "  -E, --events       List all events after the calendar\n";
-    cout << "  -n            No color\n";
+    cout << "  --color=WHEN  Colorize output: always, never, or auto\n";
+    cout << "                (default: auto; colors only when stdout is a TTY)\n";
+    cout << "  -n            No color (same as --color=never)\n";
     cout << "  -h            Show this help\n";
     cout << "  -v            Show version\n\n";
-    cout << ansi::bold << "Format specifiers for -t:" << ansi::reset << "\n";
+    cout << B << "Format specifiers for -t:" << R << "\n";
     cout << "  %Y (year)  %y (2-digit year)  %m (month)  %d (day)\n";
     cout << "  %B (full month)  %b (short month)\n";
     cout << "  %A (full weekday)  %a (short weekday)\n";
     cout << "  %H:%M:%S (time)  %% (literal %)\n\n";
-    cout << ansi::bold << "Examples:" << ansi::reset << "\n";
+    cout << B << "Examples:" << R << "\n";
     cout << "  " << prog << "                     # current month\n";
     cout << "  " << prog << " -e 7 1405             # English weekday names\n";
     cout << "  " << prog << " -t                    # date & time now\n";
@@ -623,18 +643,12 @@ void print_help(const char* prog) {
     cout << "  " << prog << " -c 1405/07/12         # Jalali -> Gregorian\n\n";
 }
 
-} // namespace
-
 // =============================================================================
 // Program entry point
 // =============================================================================
 
 [[nodiscard]] int run(int argc, char* argv[]) {
     Options opts;
-
-    // Respect the NO_COLOR convention (https://no-color.org).
-    if (const char* nc = std::getenv("NO_COLOR"); nc && *nc)
-        opts.color = false;
 
     static const struct option long_opts[] = {
         {"convert",     required_argument, nullptr, 'c'},
@@ -650,6 +664,7 @@ void print_help(const char* prog) {
         {"no-bidi",     no_argument,       nullptr, 'B'},
         {"no-holidays", no_argument,       nullptr, 'H'},
         {"events",      no_argument,       nullptr, 'E'},
+        {"color",       required_argument, nullptr, 1000},
         {"nocolor",     no_argument,       nullptr, 'n'},
         {"help",        no_argument,       nullptr, 'h'},
         {"version",     no_argument,       nullptr, 'v'},
@@ -662,10 +677,25 @@ void print_help(const char* prog) {
     std::string convert_arg;
     std::string today_fmt;
 
+    bool help_requested = false;
+
     int opt;
     while ((opt = getopt_long(argc, argv, "c:dty3spejPBNHnEhv",
                               long_opts, nullptr)) != -1) {
         switch (opt) {
+            case 1000: {
+                // --color=WHEN
+                const std::string_view when(optarg);
+                if      (when == "always") opts.color_mode = ColorMode::Always;
+                else if (when == "never")  opts.color_mode = ColorMode::Never;
+                else if (when == "auto")   opts.color_mode = ColorMode::Auto;
+                else {
+                    std::cerr << "Error: --color must be "
+                                 "'always', 'never', or 'auto'\n";
+                    return 1;
+                }
+                break;
+            }
             case 'c': do_convert = true; convert_arg = optarg; break;
             case 'd': do_diff    = true; break;
             case 't': do_today   = true; break;
@@ -679,11 +709,33 @@ void print_help(const char* prog) {
             case 'B': opts.no_bidi       = true; break;
             case 'H': opts.show_holidays = false; break;
             case 'E': opts.show_events   = true;  break;
-            case 'n': opts.color         = false; break;
-            case 'h': print_help(argv[0]); return 0;
+            case 'n': opts.color_mode    = ColorMode::Never; break;
+            case 'h': help_requested     = true; break;
             case 'v': std::cout << "jala " << VERSION << '\n'; return 0;
-            default:  print_help(argv[0]); return 1;
+            default:  print_help(argv[0], true); return 1;
         }
+    }
+
+    // Resolve the final color decision. The default (Auto) emits colors
+    // only when stdout is a terminal and NO_COLOR is not set. Explicit
+    // --color=always overrides NO_COLOR; explicit --color=never forces
+    // color off regardless of the environment.
+    switch (opts.color_mode) {
+        case ColorMode::Always:
+            opts.color = true;
+            break;
+        case ColorMode::Never:
+            opts.color = false;
+            break;
+        case ColorMode::Auto:
+            opts.color = (isatty(STDOUT_FILENO) != 0) &&
+                         (std::getenv("NO_COLOR") == nullptr);
+            break;
+    }
+
+    if (help_requested) {
+        print_help(argv[0], opts.color);
+        return 0;
     }
 
     if (do_convert) return cmd_convert(convert_arg, opts);
@@ -756,6 +808,8 @@ void print_help(const char* prog) {
 
     return 0;
 }
+
+}  // namespace
 
 int main(int argc, char* argv[]) {
     try {
