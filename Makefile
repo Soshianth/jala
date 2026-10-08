@@ -9,8 +9,14 @@
 
 TARGET      := jala
 SRCDIR      := src
-SRCS        := $(SRCDIR)/main.cpp $(SRCDIR)/jalali.cpp $(SRCDIR)/holidays.cpp
-HDRS        := $(SRCDIR)/jalali.hpp
+SRCS        := $(SRCDIR)/main.cpp \
+               $(SRCDIR)/jalali.cpp \
+               $(SRCDIR)/gregorian.cpp \
+               $(SRCDIR)/holidays.cpp
+HDRS        := $(SRCDIR)/jalali.hpp \
+               $(SRCDIR)/gregorian.hpp \
+               $(SRCDIR)/holidays.hpp \
+               $(SRCDIR)/holidays_data.hpp
 OBJS        := $(SRCS:.cpp=.o)
 
 TEST_SRC    := tests/jalali_test.cpp
@@ -24,7 +30,7 @@ MANDIR      := $(PREFIX)/share/man/man1
 CXX         ?= g++
 CXXFLAGS    ?= -std=c++17 -O2 -g -Wall -Wextra -I$(SRCDIR)
 LDFLAGS     ?=
-LDLIBS      ?= -lboost_date_time
+LDLIBS      ?=
 
 # =============================================================================
 # Targets
@@ -42,8 +48,8 @@ all: $(TARGET)
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $(OBJS) $(LDFLAGS) $(LDLIBS)
 
-# Compile each source file to an object file. The header is listed as a
-# dependency so any change to jalali.hpp triggers a full rebuild.
+# Compile each source file to an object file. The headers are listed
+# as dependencies so any change triggers a full rebuild.
 $(SRCDIR)/%.o: $(SRCDIR)/%.cpp $(HDRS)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
@@ -82,10 +88,11 @@ test-unit: $(TEST_BIN)
 	@echo "Running unit tests..."
 	@$(TEST_BIN)
 
-# The unit tests link against jalali.cpp directly, with no dependency on
-# main.cpp or the CLI. They run in a few milliseconds.
-$(TEST_BIN): $(TEST_SRC) $(SRCDIR)/jalali.cpp $(SRCDIR)/holidays.cpp $(HDRS)
-	$(CXX) $(CXXFLAGS) -o $@ $(TEST_SRC) $(SRCDIR)/jalali.cpp $(SRCDIR)/holidays.cpp $(LDFLAGS) $(LDLIBS)
+# The unit tests link against jalali.cpp, gregorian.cpp, and
+# holidays.cpp directly, with no dependency on main.cpp or the CLI.
+# They run in a few milliseconds.
+$(TEST_BIN): $(TEST_SRC) $(SRCDIR)/jalali.cpp $(SRCDIR)/gregorian.cpp $(SRCDIR)/holidays.cpp $(HDRS)
+	$(CXX) $(CXXFLAGS) -o $@ $(TEST_SRC) $(SRCDIR)/jalali.cpp $(SRCDIR)/gregorian.cpp $(SRCDIR)/holidays.cpp $(LDFLAGS) $(LDLIBS)
 
 # -----------------------------------------------------------------------------
 # Housekeeping

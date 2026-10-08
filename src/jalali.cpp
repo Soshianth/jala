@@ -7,9 +7,14 @@
 // options. All algorithms use the 33-year leap-year cycle, which is
 // the model that matches the official Iranian calendar for the
 // modern era (roughly 1200-1600 Jalali).
+//
+// The Gregorian calendar is provided by the local gregorian.hpp
+// header, which implements the Fliegel–Van Flandern JDN formulas.
+// There is no dependency on Boost or any other external library.
 // =============================================================================
 
 #include "jalali.hpp"
+#include "gregorian.hpp"
 
 #include <sstream>
 #include <vector>
@@ -173,19 +178,14 @@ PersianDate jdn_to_persian(long jdn) {
     return { year, month, day };
 }
 
-// Convert a boost::gregorian::date to a Jalali date.
-PersianDate to_persian(const boost::gregorian::date& g) {
-    return jdn_to_persian(g.julian_day());
+// Convert a Gregorian date to a Jalali date.
+PersianDate to_persian(const GregorianDate& g) {
+    return jdn_to_persian(to_jdn(g.year, g.month, g.day));
 }
 
-// Convert a Julian Day Number to a boost::gregorian::date.
-//
-// We compute the date as a difference from a fixed reference point
-// (1970-01-01) to avoid recomputing the epoch on every call.
-boost::gregorian::date jdn_to_gregorian(long jdn) {
-    static const boost::gregorian::date ref(1970, 1, 1);
-    static const long                  ref_jdn = ref.julian_day();
-    return ref + boost::gregorian::days(jdn - ref_jdn);
+// Convert a Julian Day Number to a Gregorian date.
+GregorianDate jdn_to_gregorian(long jdn) {
+    return from_jdn(jdn);
 }
 
 // =============================================================================
@@ -207,8 +207,7 @@ SimpleDate parse_date(std::string_view s) {
 
     // Special keyword: the current date.
     if (s == "today" || s == "now") {
-        const PersianDate p = to_persian(
-            boost::gregorian::day_clock::local_day());
+        const PersianDate p = to_persian(today());
         out = { p.year, p.month, p.day, true, true };
         return out;
     }
@@ -253,15 +252,9 @@ SimpleDate parse_date(std::string_view s) {
         const int max_day = persian_month_days(out.year, out.month);
         if (out.day < 1 || out.day > max_day) return out;
     } else {
-        // Gregorian: let Boost decide. The date constructor throws
-        // on invalid input such as 2026-02-30, which we translate
-        // into valid == false.
-        try {
-            boost::gregorian::date g(out.year, out.month, out.day);
-            (void)g;
-        } catch (const std::exception&) {
-            return out;
-        }
+        // Gregorian: check the date against the leap-year-aware
+        // month lengths in gregorian.hpp.
+        if (!is_valid(out.year, out.month, out.day)) return out;
     }
 
     out.valid = true;

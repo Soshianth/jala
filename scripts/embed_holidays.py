@@ -24,6 +24,12 @@ Its shape is a flat array of day objects:
       ...
     ]
 
+Before embedding, every event description is passed through an
+override map loaded from data/overrides.json. That file is produced
+by scripts/neutralize_overrides.py and turns religious wording into
+neutral wording, or drops an event entirely when the override value
+is the empty string.
+
 We emit two sorted tables into src/holidays_data.hpp:
 
   HOLIDAYS[] — one entry per holiday day. When multiple holiday
@@ -47,9 +53,10 @@ from pathlib import Path
 # Paths
 # ---------------------------------------------------------------------------
 
-REPO_ROOT  = Path(__file__).resolve().parent.parent
-INPUT_JSON = REPO_ROOT / "data" / "holidays.json"
-OUTPUT_HPP = REPO_ROOT / "src" / "holidays_data.hpp"
+REPO_ROOT      = Path(__file__).resolve().parent.parent
+INPUT_JSON     = REPO_ROOT / "data" / "holidays.json"
+OUTPUT_HPP     = REPO_ROOT / "src" / "holidays_data.hpp"
+OVERRIDES_JSON = REPO_ROOT / "data" / "overrides.json"
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -79,8 +86,8 @@ def validate_date(date: str) -> None:
 def escape_cpp(s: str) -> str:
     out = []
     for ch in s:
-        if ch == "\\":  out.append("\\\\")
-        elif ch == '"': out.append('\\"')
+        if ch == "\\":   out.append("\\\\")
+        elif ch == '"':  out.append('\\"')
         elif ch == "\n": out.append("\\n")
         elif ch == "\t": out.append("\\t")
         else:            out.append(ch)
@@ -99,11 +106,35 @@ def load_raw(path: Path) -> list[dict]:
     return data
 
 
-def collect(entries: list[dict]) -> tuple[dict[str, str], list[tuple[str, str, bool]]]:
+def load_overrides() -> dict[str, str]:
+    """Load data/overrides.json, ignoring the _comment key.
+
+    Returns an empty dict if the file is missing or unreadable, so
+    embed_holidays.py keeps working even when the secularization step
+    has not been run yet.
+    """
+    if not OVERRIDES_JSON.exists():
+        return {}
+    try:
+        with OVERRIDES_JSON.open(encoding="utf-8") as f:
+            data = json.load(f)
+        return {k: v for k, v in data.items() if not k.startswith("_")}
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"warning: could not read {OVERRIDES_JSON}: {exc}",
+              file=sys.stderr)
+        return {}
+
+
+def collect(entries: list[dict],
+            overrides: dict[str, str],
+            ) -> tuple[dict[str, str], list[tuple[str, str, bool]]]:
     """
     Return:
       holidays — {date: "name1، name2"} for days with is_holiday=true
       events   — [(date, description, is_holiday), ...] for every event
+
+    `overrides` maps an original description to a replacement. An
+    empty replacement drops the event entirely.
     """
     holidays: dict[str, str] = {}
     events:   list[tuple[str, str, bool]] = []
@@ -121,6 +152,12 @@ def collect(entries: list[dict]) -> tuple[dict[str, str], list[tuple[str, str, b
             desc = (ev.get("description") or "").strip()
             if not desc:
                 continue
+
+            # Apply override; an empty result drops the event.
+            desc = overrides.get(desc, desc)
+            if not desc:
+                continue
+
             is_holiday = bool(ev.get("is_holiday"))
             events.append((date, desc, is_holiday))
             if is_holiday:
@@ -196,8 +233,9 @@ def main() -> int:
         print(f"error: {INPUT_JSON} not found", file=sys.stderr)
         return 1
 
-    entries = load_raw(INPUT_JSON)
-    holidays, events = collect(entries)
+    entries   = load_raw(INPUT_JSON)
+    overrides = load_overrides()
+    holidays, events = collect(entries, overrides)
 
     if not holidays and not events:
         print("warning: no data parsed", file=sys.stderr)
@@ -207,6 +245,7 @@ def main() -> int:
     print(f"wrote {OUTPUT_HPP}")
     print(f"  {len(holidays)} holiday days")
     print(f"  {len(events)} total events")
+    print(f"  {len(overrides)} override(s) available")
     return 0
 
 

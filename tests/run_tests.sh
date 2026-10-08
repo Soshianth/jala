@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# =============================================================================
+# run_tests.sh — integration tests for the jala CLI
+# SPDX-License-Identifier: MIT
+#
+# Exercises the built binary end-to-end through its command-line
+# interface. Run via `make test` or `ctest`.
+# =============================================================================
 set -u
 
 BIN="${JALA_BIN:-./jala}"
@@ -127,6 +134,19 @@ assert_contains "--events long flag works" "$out" "Events:"
 
 out=$("$BIN" -n 1 1405)
 assert_not_contains "no events without -E" "$out" "Events:"
+
+# ---- Secularization ----
+
+echo
+echo "Running secularization checks..."
+if bash "$(dirname "$0")/secularization_test.sh" >/dev/null 2>&1; then
+    echo -e "${GREEN}✓${RESET} secularization checks passed"
+    PASS=$((PASS + 1))
+else
+    echo -e "${RED}✗${RESET} secularization checks failed"
+    echo "    run: bash tests/secularization_test.sh"
+    FAIL=$((FAIL + 1))
+fi
 
 # ---- Summary ----
 

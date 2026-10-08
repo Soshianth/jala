@@ -1,17 +1,24 @@
 // =============================================================================
 // main.cpp — command-line interface, rendering, and dispatch for jala
 // SPDX-License-Identifier: MIT
+//
+// This is the presentation layer: it parses command-line arguments,
+// lays out the calendar grid, and dispatches to the subcommands.
+// The calendar math lives in jalali.cpp and the Gregorian helpers in
+// gregorian.cpp; this file only formats their output.
+//
+// There is no dependency on Boost or any external library.
 // =============================================================================
 
 #include "jalali.hpp"
 #include "holidays.hpp"
-#include <wchar.h>
-#include <wctype.h>
 
-#include <algorithm>
+#include <clocale>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
+#include <exception>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -21,10 +28,10 @@
 
 #include <getopt.h>
 #include <unistd.h>
+#include <wchar.h>
+#include <wctype.h>
 
 using namespace jala;
-
-namespace bg = boost::gregorian;
 
 namespace {
 
@@ -44,7 +51,7 @@ constexpr std::string_view yellow  = "\033[33m";
 constexpr std::string_view blue    = "\033[34m";
 constexpr std::string_view cyan    = "\033[36m";
 constexpr std::string_view red     = "\033[31m";
-} // namespace ansi
+}  // namespace ansi
 
 // Controls when ANSI colors are emitted.
 //   Auto   — colors only when stdout is a TTY (default).
@@ -226,8 +233,12 @@ struct Options {
     // ---- Day numbers ----
     const int first_wd = persian_weekday(year, month, 1);
     const int days     = persian_month_days(year, month);
-    const PersianDate today = to_persian(bg::day_clock::local_day());
-    const bool is_current   = (today.year == year && today.month == month);
+
+    // The local variable is named `today_date` so that it does not
+    // shadow the function `jala::today()` used to obtain it.
+    const PersianDate today_date = to_persian(jala::today());
+    const bool is_current =
+        (today_date.year == year && today_date.month == month);
 
     // Build the holiday index once per program run. Since this function
     // may be called multiple times (e.g. for a full year), a function-
@@ -244,7 +255,8 @@ struct Options {
     }
 
     for (int d = 1; d <= days; ++d) {
-        const int num = opts.julian_day ? persian_day_of_year(year, month, d) : d;
+        const int num = opts.julian_day
+            ? persian_day_of_year(year, month, d) : d;
         std::string s = std::to_string(num);
         std::string cell(static_cast<size_t>(cw - s.size()), ' ');
         cell += s;
@@ -255,7 +267,7 @@ struct Options {
             opts.show_holidays &&
             holidays.contains(format_holiday_key(year, month, d));
 
-        if (is_current && today.day == d) {
+        if (is_current && today_date.day == d) {
             // Today: reverse video (highest priority)
             if (opts.color) row += ansi::reverse;
             row += cell;
@@ -447,7 +459,7 @@ int cmd_convert(std::string_view arg, const Options& opts) {
     };
 
     if (sd.jalali) {
-        const auto g = jdn_to_gregorian(
+        const GregorianDate g = jdn_to_gregorian(
             persian_to_jdn(sd.year, sd.month, sd.day));
         const int wd = persian_weekday(sd.year, sd.month, sd.day);
         const char* wdn = opts.persian ? WEEKDAYS_FULL_FA[wd]
@@ -464,28 +476,14 @@ int cmd_convert(std::string_view arg, const Options& opts) {
         if (opts.color) std::cout << ansi::bold << ansi::cyan;
         std::cout << "Gregorian: ";
         if (opts.color) std::cout << ansi::reset;
-        std::cout << g.year() << '-'
-                  << std::setw(2) << std::setfill('0')
-                  << g.month().as_number() << '-'
-                  << std::setw(2) << std::setfill('0') << g.day()
+        std::cout << g.year << '-'
+                  << std::setw(2) << std::setfill('0') << g.month << '-'
+                  << std::setw(2) << std::setfill('0') << g.day
                   << std::setfill(' ') << "\n\n";
     } else {
-        // Constructing a boost::gregorian::date can throw if any
-        // component is out of range. parse_date() has already
-        // validated the input, but we keep the guard for defense
-        // in depth and to produce a clean error message.
-        boost::gregorian::date g;
-        try {
-            g = boost::gregorian::date(sd.year, sd.month, sd.day);
-        } catch (const std::exception& e) {
-            std::cerr << "Error: invalid Gregorian date: "
-                      << e.what() << "\n";
-            return 1;
-        }
-        if (g.is_not_a_date()) {
-            std::cerr << "Error: invalid Gregorian date.\n";
-            return 1;
-        }
+        // parse_date() has already validated the Gregorian date,
+        // so no exceptions are possible here.
+        const GregorianDate g{ sd.year, sd.month, sd.day };
         const PersianDate p = to_persian(g);
         const int wd = persian_weekday(p.year, p.month, p.day);
         const char* wdn = opts.persian ? WEEKDAYS_FULL_FA[wd]
@@ -516,23 +514,13 @@ int cmd_diff(std::string_view a, std::string_view b, const Options& opts) {
     if (!da.valid) { std::cerr << "Error: invalid date '" << a << "'\n"; return 1; }
     if (!db.valid) { std::cerr << "Error: invalid date '" << b << "'\n"; return 1; }
 
-    // Convert each date to a JDN. Gregorian dates may throw if the
-    // input is out of range; parse_date() has already validated
-    // them, but we catch exceptions anyway to produce a clean error.
-    long j1 = 0;
-    long j2 = 0;
-    try {
-        j1 = da.jalali
-            ? persian_to_jdn(da.year, da.month, da.day)
-            : boost::gregorian::date(da.year, da.month, da.day).julian_day();
-        j2 = db.jalali
-            ? persian_to_jdn(db.year, db.month, db.day)
-            : boost::gregorian::date(db.year, db.month, db.day).julian_day();
-    } catch (const std::exception& e) {
-        std::cerr << "Error: could not convert date: "
-                  << e.what() << "\n";
-        return 1;
-    }
+    // Both dates have been validated, so the conversions cannot fail.
+    const long j1 = da.jalali
+        ? persian_to_jdn(da.year, da.month, da.day)
+        : to_jdn(da.year, da.month, da.day);
+    const long j2 = db.jalali
+        ? persian_to_jdn(db.year, db.month, db.day)
+        : to_jdn(db.year, db.month, db.day);
 
     const long diff  = std::abs(j2 - j1);
     const long weeks = diff / 7;
@@ -562,8 +550,7 @@ int cmd_diff(std::string_view a, std::string_view b, const Options& opts) {
 // =============================================================================
 
 [[nodiscard]] std::string format_jdate(std::string_view fmt, const Options& opts) {
-    const auto g  = boost::gregorian::day_clock::local_day();
-    const auto p  = to_persian(g);
+    const PersianDate p  = to_persian(jala::today());
     const int  wd = persian_weekday(p.year, p.month, p.day);
     const int  display_year = opts.imperial ? p.year + IMPERIAL_OFFSET : p.year;
 
@@ -832,10 +819,9 @@ void print_help(const char* prog, bool use_color) {
         }
     }
 
-    const PersianDate today = to_persian(
-        boost::gregorian::day_clock::local_day());
-    const int year  = opts.year  != -1 ? opts.year  : today.year;
-    const int month = opts.month != -1 ? opts.month : today.month;
+    const PersianDate today_date = to_persian(jala::today());
+    const int year  = opts.year  != -1 ? opts.year  : today_date.year;
+    const int month = opts.month != -1 ? opts.month : today_date.month;
 
     if (opts.full_year)         print_year(year, opts);
     else if (opts.three_months) print_three_months(year, month, opts);

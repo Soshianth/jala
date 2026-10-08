@@ -15,7 +15,7 @@
 #include <string>
 #include <string_view>
 
-#include <boost/date_time/gregorian/gregorian.hpp>
+#include "gregorian.hpp"
 
 namespace jala {
 
@@ -104,11 +104,11 @@ inline constexpr std::array<const char*, 7> WEEKDAYS_FULL_FA = {
 // Convert a Julian Day Number to a Jalali date.
 [[nodiscard]] PersianDate jdn_to_persian(long jdn);
 
-// Convert a boost::gregorian::date to a Jalali date.
-[[nodiscard]] PersianDate to_persian(const boost::gregorian::date& g);
+// Convert a Gregorian date to a Jalali date.
+[[nodiscard]] PersianDate to_persian(const GregorianDate& g);
 
-// Convert a Julian Day Number to a boost::gregorian::date.
-[[nodiscard]] boost::gregorian::date jdn_to_gregorian(long jdn);
+// Convert a Julian Day Number to a Gregorian date.
+[[nodiscard]] GregorianDate jdn_to_gregorian(long jdn);
 
 // =============================================================================
 // Calendar arithmetic
@@ -149,4 +149,4 @@ inline constexpr std::array<const char*, 7> WEEKDAYS_FULL_FA = {
 // Replace ASCII digits in `s` with their Persian counterparts.
 [[nodiscard]] std::string to_persian_digits(std::string_view s);
 
-} // namespace jala
+}  // namespace jala

@@ -1,0 +1,4 @@
+{
+  "_comment": "Hand-edited exceptions. Entries here win over the automatic rules in scripts/neutralize_overrides.py. This file is never overwritten by any script. To drop an event entirely, set its value to the empty string.",
+  "شهادت سردار حاج قاسم سلیمانی [1398 خورشیدی]": ""
+}
