@@ -124,6 +124,28 @@ for Persian digits and with
 .B \-n
 to disable color.
 .TP
+.BR \-\-color = WHEN
+Select when ANSI color escape sequences are emitted. Valid values
+are:
+.RS 4
+.IP \(bu 2
+.B auto
+(the default): emit colors only when standard output is a terminal
+and the
+.B NO_COLOR
+environment variable is unset.
+.IP \(bu 2
+.B always
+: emit colors unconditionally, even when output is redirected or
+.B NO_COLOR
+is set.
+.IP \(bu 2
+.B never
+: never emit colors. This is equivalent to the
+.B \-n
+flag.
+.RE
+.TP
 .BR \-n ", " \-\-nocolor
 Disable ANSI color output. Useful when piping the output to a file
 or another program.

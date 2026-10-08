@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-10-08
+
+### Added
+
+- `src/gregorian.{hpp,cpp}`: a small, self-contained Gregorian
+  calendar implementation based on the Fliegel–Van Flandern JDN
+  formulas. It replaces the Boost.Date_Time dependency.
+- `scripts/neutralize_overrides.py` and `data/manual_overrides.json`:
+  an automatic pipeline that rewrites holiday descriptions to remove
+  religious framing, plus a hand-edited exception list that takes
+  precedence over the automatic rules.
+- `tests/secularization_test.sh`: asserts that the generated holiday
+  header contains no forbidden markers.
+- A `CHECK_EQ` macro in `tests/jalali_test.cpp` that prints both
+  operands on failure, making off-by-one bugs easier to diagnose.
+- Wide-range round-trip tests for both the Jalali and the Gregorian
+  calendars, covering leap years and century boundaries.
+- A `make holidays` target that regenerates the derived data files
+  on demand.
+
+### Changed
+
+- Removed the Boost.Date_Time dependency. `jala` now builds with
+  only a C++17 compiler and Python 3.9+ for the data generation
+  step.
+- `src/holidays_data.hpp` and `data/overrides.json` are no longer
+  tracked in version control. They are produced by the Python
+  scripts in `scripts/` and regenerated automatically by the
+  Makefile whenever the JSON source or a generator changes.
+- `debian/control`: dropped `libboost-date-time-dev`, added
+  `python3` to `Build-Depends`, bumped `Standards-Version` to
+  `4.7.2`, and updated the Maintainer to Mahdi Moradi.
+
+### Removed
+
+- The `boost::gregorian::date`-based overloads of `to_persian` and
+  `jdn_to_gregorian`. The new signatures use the local
+  `GregorianDate` struct.
+
 ## [1.2.0] - 2026-10-07
 
 ### Added
@@ -60,7 +99,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The obsolete monolithic `jala.cpp` at the repository root has
   been removed; the sources now live under `src/`.
 
+[1.3.0]: https://github.com/Soshianth/jala/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Soshianth/jala/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/Soshianth/jala/compare/v1.0.1...v1.1.0
+[1.0.1]: https://github.com/Soshianth/jala/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/Soshianth/jala/releases/tag/v1.0.0
+
 
 ## [1.1.0] - 2026-10-06
 
@@ -85,7 +129,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pyproject.toml`, `uv.lock`, and `.python-version` are now tracked.
 - The repository moved from `mahdymorady/jala` to `Soshianth/jala`.
 - Unit-test target now links against `src/holidays.cpp`.
-
 
 ## [1.0.1] - 2026-10-05
 
@@ -119,9 +162,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `%b` (short month) in Persian mode no longer truncates the
   multibyte UTF-8 name mid-character. It falls back to the full
   Persian name.
-
-[1.0.1]: https://github.com/Soshianth/jala/compare/v1.0.0...v1.0.1
-
 
 ## [1.0.0] - 2026-10-04
 
@@ -165,7 +205,3 @@ First stable release.
   format string (e.g. `-tp` used to parse as `-t` with `p`)
 - `-y` with a single numeric argument now correctly treats it as the
   year rather than the month
-
-[Unreleased]: https://github.com/Soshianth/jala/compare/v1.2.0...main
-[1.1.0]: https://github.com/Soshianth/jala/compare/v1.0.1...v1.1.0
-[1.0.0]: https://github.com/Soshianth/jala/releases/tag/v1.0.0
