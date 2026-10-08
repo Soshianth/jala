@@ -8,7 +8,13 @@
 # =============================================================================
 set -u
 
-HEADER="${JALA_HEADER:-src/holidays_data.hpp}"
+# Locate the header relative to this script, not the current working
+# directory. This way the script works whether it is invoked from the
+# project root, from the build directory, or through CTest.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+HEADER="${JALA_HEADER:-$REPO_ROOT/src/holidays_data.hpp}"
 
 if [ ! -f "$HEADER" ]; then
     echo "error: $HEADER not found" >&2
