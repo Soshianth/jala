@@ -83,16 +83,16 @@ sudo make install
 Debian / Ubuntu (x86_64):
 
 ```bash
-wget https://github.com/Soshianth/jala/releases/download/v1.3.0/jala_1.3.0-1_amd64.deb
+wget https://github.com/Soshianth/jala/releases/download/v1.4.0/jala_1.4.0-1_amd64.deb
 sudo dpkg -i jala_1.3.0-1_amd64.deb
 ```
 
 Other Linux distributions (x86_64):
 
 ```bash
-wget https://github.com/Soshianth/jala/releases/download/v1.3.0/jala-v1.3.0-linux-x86_64.tar.gz
-tar xzf jala-v1.3.0-linux-x86_64.tar.gz
-sudo install -m 755 jala-v1.3.0-linux-x86_64 /usr/local/bin/jala
+wget https://github.com/Soshianth/jala/releases/download/v1.4.0/jala-v1.4.0-linux-x86_64.tar.gz
+tar xzf jala-v1.4.0-linux-x86_64.tar.gz
+sudo install -m 755 jala-v1.4.0-linux-x86_64 /usr/local/bin/jala
 ```
 
 ## Usage
@@ -124,6 +124,7 @@ See `man jala` for the complete manual.
 | `-H` | `--no-holidays` | Do not highlight Iranian holidays |
 | `-E` | `--events` | List all events after the calendar |
 | | `--color=WHEN` | Colorize output: `always`, `never`, or `auto` |
+| | `--calendar=WHEN` | Interpret `-c` and `-d` dates: `auto`, `jalali`, `gregorian` |
 | `-n` | | No color (same as `--color=never`) |
 | `-h` | `--help` | Show help |
 | `-v` | `--version` | Show version |
@@ -211,8 +212,10 @@ set its value to the empty string:
 ```json
 {
   "_comment": "Hand-edited exceptions.",
-  "شهادت سردار حاج قاسم سلیمانی [1398 خورشیدی]": ""
+  "original text from holidays.json": "your preferred wording",
+  "another original text": ""
 }
+
 ```
 
 To regenerate the data files manually:

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(jala
-    VERSION 1.3.0
+    VERSION 1.4.0
     DESCRIPTION "Persian (Jalali) calendar in the terminal"
     LANGUAGES CXX
 )

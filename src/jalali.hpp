@@ -23,7 +23,12 @@ namespace jala {
 // Constants
 // =============================================================================
 
-inline constexpr int MAX_YEAR        = 9999;
+// Highest Jalali year the conversion algorithm can handle. The
+// underlying jalaali-js algorithm is validated up to year 3177
+// (Gregorian 3798); beyond that, the leap-year pattern is not
+// defined. Users entering years above this limit receive an error
+// from the CLI.
+inline constexpr int MAX_YEAR        = 3177;
 inline constexpr int MAX_MONTH       = 12;
 inline constexpr int IMPERIAL_OFFSET = 1180;  // Imperial = Jalali + 1180
 
@@ -35,6 +40,24 @@ struct PersianDate {
     int year  = 0;
     int month = 0;
     int day   = 0;
+};
+
+// Which calendar a date string should be interpreted in.
+//
+//   Auto      -- heuristic: a year below 1700 is treated as Jalali,
+//                anything else as Gregorian. This is the default for
+//                backwards compatibility.
+//   Jalali    -- always interpret the input as Jalali.
+//   Gregorian -- always interpret the input as Gregorian.
+//
+// The flag --calendar=auto|jalali|gregorian on the CLI maps directly
+// to these values. It removes the ambiguity that arises when a user
+// enters a Jalali year above 1699 (e.g. 3178), which the heuristic
+// would otherwise read as Gregorian.
+enum class CalendarMode {
+    Auto,
+    Jalali,
+    Gregorian,
 };
 
 // A date parsed from user input. `jalali` records whether the year was
@@ -144,7 +167,11 @@ inline constexpr std::array<const char*, 7> WEEKDAYS_FULL_FA = {
 //     rejected).
 //
 // On any failure, the returned SimpleDate has valid == false.
-[[nodiscard]] SimpleDate parse_date(std::string_view s);
+//
+// `mode` selects the calendar explicitly. With CalendarMode::Auto
+// (the default), the year-based heuristic described above is used.
+[[nodiscard]] SimpleDate parse_date(std::string_view s,
+                                    CalendarMode mode = CalendarMode::Auto);
 
 // Replace ASCII digits in `s` with their Persian counterparts.
 [[nodiscard]] std::string to_persian_digits(std::string_view s);

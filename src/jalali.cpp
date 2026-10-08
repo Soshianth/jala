@@ -2,43 +2,103 @@
 // jalali.cpp — implementation of the calendar-math layer
 // SPDX-License-Identifier: MIT
 //
-// This file implements the pure Jalali <-> Gregorian conversion layer.
-// It has no dependency on I/O, terminal formatting, or command-line
-// options. All algorithms use the 33-year leap-year cycle, which is
-// the model that matches the official Iranian calendar for the
-// modern era (roughly 1200-1600 Jalali).
+// The Jalali arithmetic in this file follows the algorithm used by
+// the jalaali-js library [1], which in turn derives from the work of
+// Kazimierz M. Borkowski ("The Persian calendar for 3000 years",
+// Earth, Moon, and Planets 74: 223-230, 1996).
+//
+// This is the same algorithm used by Google Calendar, moment-jalaali,
+// and most other modern implementations. It correctly models the
+// irregular leap years around the year 1400.
 //
 // The Gregorian calendar is provided by the local gregorian.hpp
-// header, which implements the Fliegel–Van Flandern JDN formulas.
-// There is no dependency on Boost or any other external library.
+// header. There is no dependency on Boost or any other external
+// library.
+//
+// [1] https://github.com/jalaali/jalaali-js (MIT)
 // =============================================================================
 
 #include "jalali.hpp"
 #include "gregorian.hpp"
 
 #include <sstream>
+#include <string>
 #include <vector>
 
 namespace jala {
 
-// =============================================================================
-// Internal helpers
-// =============================================================================
-
 namespace {
 
-// The number of days in a complete 33-year Jalali cycle.
+// Era boundaries of the Jalali calendar. Every pair of consecutive
+// values defines an era within which the leap-year pattern is
+// deterministic. Values are chosen so that Farvardin 1 of every year
+// in the era falls on the expected Gregorian date.
 //
-// A cycle contains 33 * 365 = 12045 common days plus 8 leap days,
-// one for each leap-year position, for a total of 12053 days.
-constexpr long DAYS_PER_CYCLE = 12053;
+// Source: jalaali-js (MIT), itself derived from Borkowski 1996.
+constexpr int BREAKS[] = {
+    -61,   9,   38,   199,  426,  686,  756,  818, 1111,
+    1181, 1210, 1635, 2060, 2097, 2192, 2262, 2324, 2394,
+    2456, 3178,
+};
+constexpr int BREAKS_COUNT =
+    static_cast<int>(sizeof(BREAKS) / sizeof(BREAKS[0]));
 
-// The Julian Day Number of Farvardin 1, year 1 (the Jalali epoch).
+// Result of the era computation for a single Jalali year.
+struct JalCal {
+    int leap;   // 0 if this year is leap; 1..4 otherwise (years since
+                // the most recent leap year, counted downward).
+    int gy;     // Gregorian year that contains Farvardin 1.
+    int march;  // Day in March on which Farvardin 1 falls.
+};
+
+// Determine the leap state and Gregorian anchor for Jalali year jy.
 //
-// This constant anchors the entire conversion: given any Jalali
-// date, we can compute an absolute day count relative to this
-// number, and vice versa.
-constexpr long JALALI_EPOCH_JDN = 1948320;
+// The algorithm is only defined for jy in [BREAKS[0], BREAKS[last]),
+// i.e. [-61, 3177]. Callers are expected to enforce this range; the
+// result is undefined outside it.
+//
+// Note on division: the jalaali-js reference implementation uses
+// truncating integer division (~~(a / b) in JavaScript). C++'s built-in
+// / and % operators on int have exactly the same behaviour, so we use
+// them directly instead of introducing floor/trunc helper functions.
+constexpr JalCal jal_cal(int jy) noexcept {
+    const int gy = jy + 621;
+
+    int leapJ = -14;
+    int jp    = BREAKS[0];
+    int jm    = 0;
+    int jump  = 0;
+
+    // Locate the era that contains jy. Each iteration advances jp to
+    // the start of the next era and accumulates the leap-year count.
+    for (int i = 1; i < BREAKS_COUNT; ++i) {
+        jm   = BREAKS[i];
+        jump = jm - jp;
+        if (jy < jm) break;
+        leapJ += (jump / 33) * 8 + (jump % 33) / 4;
+        jp     = jm;
+    }
+    const int n = jy - jp;
+
+    // Accumulate the leap years from the start of the era to jy.
+    leapJ += (n / 33) * 8 + ((n % 33) + 3) / 4;
+    if (jump % 33 == 4 && jump - n == 4) leapJ += 1;
+
+    // Count leap years in the Gregorian calendar from year 1 to gy.
+    const int leapG = gy / 4 - ((gy / 100 + 1) * 3) / 4 - 150;
+
+    // Day in March on which Farvardin 1 falls.
+    const int march = 20 + leapJ - leapG;
+
+    // Determine how many years have passed since the last leap year.
+    // A value of 0 means jy itself is a leap year.
+    int m = n;
+    if (jump - m < 6) m = m - jump + ((jump + 4) / 33) * 33;
+    int leap = ((m + 1) % 33 - 1) % 4;
+    if (leap == -1) leap = 4;
+
+    return { leap, gy, march };
+}
 
 }  // namespace
 
@@ -46,38 +106,16 @@ constexpr long JALALI_EPOCH_JDN = 1948320;
 // Calendar arithmetic
 // =============================================================================
 
-// Returns true if `year` is a leap year in the Jalali calendar.
-//
-// The Jalali calendar follows a 33-year cycle with eight leap
-// years. Their positions within each cycle are:
-//
-//     1, 5, 9, 13, 17, 22, 26, 30
-//
-// The position of a given year inside its cycle is:
-//
-//     ((year - 1) mod 33) + 1
-//
-// In a leap year, Esfand (month 12) has 30 days instead of 29.
-// Outside the modern era, the 33-year cycle can drift by one day
-// from the official (observational) calendar; this limitation is
-// documented in the README.
 bool persian_is_leap(int year) {
-    const int pos = ((year - 1) % 33) + 1;
-    return (pos == 1  || pos == 5  || pos == 9  || pos == 13 ||
-            pos == 17 || pos == 22 || pos == 26 || pos == 30);
+    return jal_cal(year).leap == 0;
 }
 
-// Number of days in a Jalali month.
-//
-// Months 1 through 6 have 31 days, months 7 through 11 have 30 days,
-// and Esfand (month 12) has 30 days in leap years and 29 otherwise.
 int persian_month_days(int year, int month) {
     if (month <= 6)  return 31;
     if (month <= 11) return 30;
     return persian_is_leap(year) ? 30 : 29;
 }
 
-// Day of the year (1..365 or 1..366) for a Jalali date.
 int persian_day_of_year(int year, int month, int day) {
     int doy = 0;
     for (int m = 1; m < month; ++m) {
@@ -86,12 +124,8 @@ int persian_day_of_year(int year, int month, int day) {
     return doy + day;
 }
 
-// Weekday index for a Jalali date.
-//
-// Returns 0 for Shanbeh (Saturday) through 6 for Jomeh (Friday).
-// The JDN offset +2 aligns the arithmetic so that JDN 1948320
-// (Farvardin 1, year 1) maps to the correct Persian weekday.
 int persian_weekday(int year, int month, int day) {
+    // JDN 0 falls on a Monday, so (JDN + 2) % 7 gives 0 = Shanbeh.
     return static_cast<int>((persian_to_jdn(year, month, day) + 2) % 7);
 }
 
@@ -99,91 +133,52 @@ int persian_weekday(int year, int month, int day) {
 // Conversion
 // =============================================================================
 
-// Convert a Jalali date to a Julian Day Number.
-//
-// The conversion counts whole 33-year cycles before the target year
-// and then walks the remaining years one by one. Each cycle has a
-// fixed length of 12053 days. The final JDN is anchored at the
-// Jalali epoch (Farvardin 1, year 1 = JDN 1948320).
 long persian_to_jdn(int year, int month, int day) {
-    // Number of complete years that come before `year`.
-    const int years_before = year - 1;
+    const JalCal r = jal_cal(year);
 
-    // Split those years into full 33-year cycles plus a remainder.
-    const long full_cycles = years_before / 33;
-    const int  partial     = years_before % 33;
-
-    // Every complete cycle contributes a fixed number of days.
-    long days = full_cycles * DAYS_PER_CYCLE;
-
-    // Walk the remaining years one by one. The positions 1..32 map
-    // directly to leap-year checks, since the cycle is defined with
-    // position 1 as its first year.
-    for (int i = 1; i <= partial; ++i) {
-        days += persian_is_leap(i) ? 366 : 365;
-    }
-
-    // Add the days of the months that precede `month` in `year`.
-    for (int m = 1; m < month; ++m) {
-        days += persian_month_days(year, m);
-    }
-
-    // Add the days already elapsed within the current month
-    // (day 1 is the first day, so we add day - 1).
-    days += day - 1;
-
-    return JALALI_EPOCH_JDN + days;
+    // JDN of Farvardin 1 of `year`, then offset within the year.
+    // The closed form below accumulates the month offset without
+    // branching: months 1..6 have 31 days, 7..11 have 30, and month
+    // 12 has 29 or 30 depending on the leap state.
+    return to_jdn(r.gy, 3, r.march)
+         + static_cast<long>(month - 1) * 31
+         - (month / 7) * (month - 7)
+         + (day - 1);
 }
 
-// Convert a Julian Day Number to a Jalali date.
-//
-// This is the exact inverse of persian_to_jdn(). It first locates
-// the year by walking 33-year cycles and then individual years,
-// then walks the months of that year, and finally reads off the
-// day within the month.
 PersianDate jdn_to_persian(long jdn) {
-    // Days elapsed since Farvardin 1, year 1.
-    long days = jdn - JALALI_EPOCH_JDN;
+    const GregorianDate g = from_jdn(jdn);
+    int jy = g.year - 621;
 
-    // Locate the 33-year cycle that contains the target date.
-    const long cycles = days / DAYS_PER_CYCLE;
-    long       rem    = days % DAYS_PER_CYCLE;
+    const JalCal r = jal_cal(jy);
+    const long jdn1f = to_jdn(g.year, 3, r.march);
+    long k = jdn - jdn1f;
 
-    // Locate the year within the cycle by subtracting full years
-    // until `rem` fits inside the current one.
-    int year_in_cycle = 33;  // default if `rem` lands exactly at the end
-    for (int i = 1; i <= 33; ++i) {
-        const int len = persian_is_leap(i) ? 366 : 365;
-        if (rem < len) {
-            year_in_cycle = i;
-            break;
+    if (k >= 0) {
+        if (k <= 185) {
+            // First six months: 31 days each.
+            return { jy,
+                     1 + static_cast<int>(k / 31),
+                     static_cast<int>(k % 31) + 1 };
         }
-        rem -= len;
+        k -= 186;
+    } else {
+        // The date belongs to the previous Jalali year.
+        jy -= 1;
+        k += 179;
+        if (r.leap == 1) k += 1;
     }
 
-    // Absolute year = completed cycles * 33 + position in cycle.
-    const int year = static_cast<int>(cycles * 33 + year_in_cycle);
-
-    // Locate the month within the year.
-    int month = 1;
-    while (month <= 12) {
-        const int len = persian_month_days(year, month);
-        if (rem < len) break;
-        rem -= len;
-        ++month;
-    }
-
-    // Whatever remains is the 0-based day index inside the month.
-    const int day = static_cast<int>(rem) + 1;
-    return { year, month, day };
+    // Remaining months: 30 days each.
+    return { jy,
+             7 + static_cast<int>(k / 30),
+             static_cast<int>(k % 30) + 1 };
 }
 
-// Convert a Gregorian date to a Jalali date.
 PersianDate to_persian(const GregorianDate& g) {
     return jdn_to_persian(to_jdn(g.year, g.month, g.day));
 }
 
-// Convert a Julian Day Number to a Gregorian date.
 GregorianDate jdn_to_gregorian(long jdn) {
     return from_jdn(jdn);
 }
@@ -192,43 +187,28 @@ GregorianDate jdn_to_gregorian(long jdn) {
 // Parsing and formatting helpers
 // =============================================================================
 
-// Parse a date string in "YYYY/MM/DD", "YYYY-MM-DD", or "today".
-//
-// The separator is chosen by the first '/' or '-' found in the
-// input. A year below 1700 is treated as Jalali; otherwise as
-// Gregorian.
-//
-// The parser is strict: every numeric component must be a complete
-// integer with no trailing characters, and the resulting date must
-// exist in its respective calendar. On any failure, the returned
-// SimpleDate has valid == false.
-SimpleDate parse_date(std::string_view s) {
+SimpleDate parse_date(std::string_view s, CalendarMode mode) {
     SimpleDate out;
 
-    // Special keyword: the current date.
     if (s == "today" || s == "now") {
         const PersianDate p = to_persian(today());
         out = { p.year, p.month, p.day, true, true };
         return out;
     }
 
-    // The separator is whichever of '/' or '-' appears first.
     const auto sep_pos = s.find_first_of("/-");
     if (sep_pos == std::string_view::npos) return out;
     const char sep = s[sep_pos];
 
-    // Split the input into three components. An empty component or a
-    // component that is not a full integer causes an early return
-    // with valid == false.
-    std::vector<int> parts;
     std::istringstream ss{ std::string(s) };
     std::string token;
+    std::vector<int> parts;
+
     while (std::getline(ss, token, sep)) {
         if (token.empty()) return out;
         try {
             std::size_t pos = 0;
             const int value = std::stoi(token, &pos);
-            // std::stoi accepts trailing garbage unless we check pos.
             if (pos != token.size()) return out;
             parts.push_back(value);
         } catch (...) {
@@ -240,20 +220,27 @@ SimpleDate parse_date(std::string_view s) {
     out.year   = parts[0];
     out.month  = parts[1];
     out.day    = parts[2];
-    out.jalali = (out.year < 1700);
 
-    // Calendar-specific validation.
+    // Decide which calendar to interpret the year in. An explicit
+    // --calendar=jalali|gregorian overrides the heuristic.
+    switch (mode) {
+        case CalendarMode::Jalali:
+            out.jalali = true;
+            break;
+        case CalendarMode::Gregorian:
+            out.jalali = false;
+            break;
+        case CalendarMode::Auto:
+            out.jalali = (out.year < 1700);
+            break;
+    }
+
     if (out.jalali) {
-        // Jalali: year >= 1, month in [1, 12], and day within the
-        // length of that month (which itself depends on leap years).
-        if (out.year < 1) return out;
+        if (out.year < 1 || out.year > MAX_YEAR) return out;
         if (out.month < 1 || out.month > 12) return out;
-
         const int max_day = persian_month_days(out.year, out.month);
         if (out.day < 1 || out.day > max_day) return out;
     } else {
-        // Gregorian: check the date against the leap-year-aware
-        // month lengths in gregorian.hpp.
         if (!is_valid(out.year, out.month, out.day)) return out;
     }
 
@@ -261,7 +248,6 @@ SimpleDate parse_date(std::string_view s) {
     return out;
 }
 
-// Replace ASCII digits in `s` with their Persian counterparts.
 std::string to_persian_digits(std::string_view s) {
     static constexpr std::array<const char*, 10> digits = {
         "۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"

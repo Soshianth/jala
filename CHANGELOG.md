@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-10-08
+
+### Added
+
+- `--calendar=auto|jalali|gregorian` for the `-c` and `-d` subcommands.
+  The default, `auto`, keeps the existing heuristic (year below 1700
+  is Jalali, otherwise Gregorian). `jalali` and `gregorian` force the
+  interpretation, which makes it possible to enter a Jalali year above
+  1699 (for example `jala -c 3177/01/01 --calendar=jalali`) and to
+  read a year below 1700 as Gregorian.
+- Reference tests for jalaali-js and the official Iranian calendar,
+  covering Nowruz in 1394, 1395, 1403, and 1404, and leap-year
+  boundaries in 1394/12/29, 1403/12/30, and 1404/12/29.
+
+### Changed
+
+- Replaced the 33-year leap-year cycle with the jalaali-js algorithm
+  (Borkowski 1996). The new algorithm matches the official Iranian
+  calendar for the entire modern era and remains valid up to year
+  3177, which is now enforced as `MAX_YEAR`. It shares the same
+  public interface as before; only `src/jalali.cpp` and the
+  arithmetic inside `src/jalali.hpp` changed.
+- Verified that the `jal_cal()` era table and `persian_month_days()`
+  agree on month lengths across the years 1200–2000 in the unit
+  tests.
+
+### Fixed
+
+- `src/main.cpp` now reports the correct version string. In v1.3.0
+  the CMake project version was bumped to 1.3.0 but the `VERSION`
+  constant in `main.cpp` was left at 1.2.0, so `jala -v` and the
+  first line of `jala -h` printed the wrong number.
+
+[1.4.0]: https://github.com/Soshianth/jala/compare/v1.3.0...v1.4.0
+
 ## [1.3.0] - 2026-10-08
 
 ### Added

@@ -39,7 +39,7 @@ namespace {
 // Constants
 // =============================================================================
 
-constexpr std::string_view VERSION = "1.2.0";
+constexpr std::string_view VERSION = "1.4.0";
 
 // ANSI escape sequences for terminal colors.
 namespace ansi {
@@ -88,6 +88,7 @@ struct Options {
     bool show_holidays = true;
     bool show_events   = false;
     ColorMode color_mode = ColorMode::Auto;
+    CalendarMode calendar_mode = CalendarMode::Auto;
 };
 
 // =============================================================================
@@ -442,7 +443,7 @@ void print_three_months(int year, int month, const Options& opts) {
 // =============================================================================
 
 int cmd_convert(std::string_view arg, const Options& opts) {
-    const SimpleDate sd = parse_date(arg);
+    const SimpleDate sd = parse_date(arg, opts.calendar_mode);
     if (!sd.valid) {
         std::cerr << "Error: cannot parse date '" << arg << "'\n";
         return 1;
@@ -509,8 +510,8 @@ int cmd_convert(std::string_view arg, const Options& opts) {
 }
 
 int cmd_diff(std::string_view a, std::string_view b, const Options& opts) {
-    const SimpleDate da = parse_date(a);
-    const SimpleDate db = parse_date(b);
+    const SimpleDate da = parse_date(a, opts.calendar_mode);
+    const SimpleDate db = parse_date(b, opts.calendar_mode);
     if (!da.valid) { std::cerr << "Error: invalid date '" << a << "'\n"; return 1; }
     if (!db.valid) { std::cerr << "Error: invalid date '" << b << "'\n"; return 1; }
 
@@ -648,6 +649,8 @@ void print_help(const char* prog, bool use_color) {
     cout << "  -E, --events       List all events after the calendar\n";
     cout << "  --color=WHEN  Colorize output: always, never, or auto\n";
     cout << "                (default: auto; colors only when stdout is a TTY)\n";
+    cout << "  --calendar=WHEN  Interpret -c and -d dates in: auto,\n";
+    cout << "                   jalali, or gregorian (default: auto)\n";
     cout << "  -n            No color (same as --color=never)\n";
     cout << "  -h            Show this help\n";
     cout << "  -v            Show version\n\n";
@@ -687,6 +690,7 @@ void print_help(const char* prog, bool use_color) {
         {"no-holidays", no_argument,       nullptr, 'H'},
         {"events",      no_argument,       nullptr, 'E'},
         {"color",       required_argument, nullptr, 1000},
+        {"calendar",    required_argument, nullptr, 1001},
         {"nocolor",     no_argument,       nullptr, 'n'},
         {"help",        no_argument,       nullptr, 'h'},
         {"version",     no_argument,       nullptr, 'v'},
@@ -714,6 +718,19 @@ void print_help(const char* prog, bool use_color) {
                 else {
                     std::cerr << "Error: --color must be "
                                  "'always', 'never', or 'auto'\n";
+                    return 1;
+                }
+                break;
+            }
+            case 1001: {
+                // --calendar=auto|jalali|gregorian
+                const std::string_view cal(optarg);
+                if      (cal == "auto")      opts.calendar_mode = CalendarMode::Auto;
+                else if (cal == "jalali")    opts.calendar_mode = CalendarMode::Jalali;
+                else if (cal == "gregorian") opts.calendar_mode = CalendarMode::Gregorian;
+                else {
+                    std::cerr << "Error: --calendar must be "
+                                 "'auto', 'jalali', or 'gregorian'\n";
                     return 1;
                 }
                 break;

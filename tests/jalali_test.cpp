@@ -7,6 +7,14 @@
 // and cover the pure conversion, arithmetic, parsing, and validation
 // functions.
 //
+// Reference values are drawn from two independent sources:
+//
+//   1. The official test suite of jalaali-js
+//      (https://github.com/jalaali/jalaali-js, MIT), which is the
+//      reference implementation of the Borkowski 1996 algorithm.
+//   2. The official Iranian calendar for Nowruz dates in the
+//      1394..1405 range.
+//
 // Build:  make test-unit
 // =============================================================================
 
@@ -43,6 +51,22 @@ using namespace jala;
         }                                                                    \
     } while (0)
 
+// Assert that a Jalali date and a Gregorian date denote the same day.
+// Both directions are checked, and the reverse conversions are
+// verified as well.
+#define CHECK_EQUIVALENT(jy, jm, jd, gy, gm, gd)                             \
+    do {                                                                     \
+        const GregorianDate _g =                                             \
+            jdn_to_gregorian(persian_to_jdn(jy, jm, jd));                    \
+        CHECK_EQ(_g.year,  gy);                                              \
+        CHECK_EQ(_g.month, gm);                                              \
+        CHECK_EQ(_g.day,   gd);                                              \
+        const PersianDate _p = to_persian(GregorianDate{ gy, gm, gd });      \
+        CHECK_EQ(_p.year,  jy);                                              \
+        CHECK_EQ(_p.month, jm);                                              \
+        CHECK_EQ(_p.day,   jd);                                              \
+    } while (0)
+
 int main() {
     // =========================================================================
     // Gregorian core: JDN round trip and reference value
@@ -77,50 +101,32 @@ int main() {
     }
 
     // =========================================================================
-    // Known Jalali -> Gregorian equivalences
-    // =========================================================================
-    // 1405/07/12 == 2026-10-04
-    {
-        const GregorianDate g = jdn_to_gregorian(persian_to_jdn(1405, 7, 12));
-        CHECK_EQ(g.year,  2026);
-        CHECK_EQ(g.month, 10);
-        CHECK_EQ(g.day,   4);
-    }
-    // 1403/01/01 == 2024-03-20 (Nowruz 1403)
-    {
-        const GregorianDate g = jdn_to_gregorian(persian_to_jdn(1403, 1, 1));
-        CHECK_EQ(g.year,  2024);
-        CHECK_EQ(g.month, 3);
-        CHECK_EQ(g.day,   20);
-    }
-    // 1398/10/11 == 2020-01-01
-    {
-        const GregorianDate g = jdn_to_gregorian(persian_to_jdn(1398, 10, 11));
-        CHECK_EQ(g.year,  2020);
-        CHECK_EQ(g.month, 1);
-        CHECK_EQ(g.day,   1);
-    }
-
-    // =========================================================================
-    // Known Gregorian -> Jalali equivalences (reverse of the above)
+    // Known Jalali <-> Gregorian equivalences
+    //
+    // Every Nowruz in the range below is well-attested:
+    //
+    //   1394/01/01 = 2015-03-21   (Saturday)
+    //   1395/01/01 = 2016-03-20   (Sunday)
+    //   1403/01/01 = 2024-03-20   (Wednesday)
+    //   1404/01/01 = 2025-03-21   (Friday)
+    //
+    // The remaining values exercise the days around leap-year
+    // boundaries. 1394 is a common year (29 days in Esfand) and 1395
+    // is a leap year (30 days), so the day before Nowruz 1395 is
+    // 1394/12/29. Likewise 1403 is leap, so the day before Nowruz
+    // 1404 is 1403/12/30.
     // =========================================================================
     {
-        const PersianDate p = to_persian(GregorianDate{ 2026, 10, 4 });
-        CHECK_EQ(p.year,  1405);
-        CHECK_EQ(p.month, 7);
-        CHECK_EQ(p.day,   12);
-    }
-    {
-        const PersianDate p = to_persian(GregorianDate{ 2024, 3, 20 });
-        CHECK_EQ(p.year,  1403);
-        CHECK_EQ(p.month, 1);
-        CHECK_EQ(p.day,   1);
-    }
-    {
-        const PersianDate p = to_persian(GregorianDate{ 2020, 1, 1 });
-        CHECK_EQ(p.year,  1398);
-        CHECK_EQ(p.month, 10);
-        CHECK_EQ(p.day,   11);
+        CHECK_EQUIVALENT(1394, 1, 1,   2015, 3, 21);  // Nowruz 1394
+        CHECK_EQUIVALENT(1394, 12, 10, 2016, 2, 29);  // inside Esfand 1394
+        CHECK_EQUIVALENT(1394, 12, 29, 2016, 3, 19);  // last day of common 1394
+        CHECK_EQUIVALENT(1395, 1, 1,   2016, 3, 20);  // Nowruz 1395
+        CHECK_EQUIVALENT(1395, 1, 22,  2016, 4, 10);  // 22nd day of 1395
+        CHECK_EQUIVALENT(1403, 1, 1,   2024, 3, 20);  // Nowruz 1403
+        CHECK_EQUIVALENT(1403, 12, 30, 2025, 3, 20);  // last day of leap 1403
+        CHECK_EQUIVALENT(1404, 1, 1,   2025, 3, 21);  // Nowruz 1404
+        CHECK_EQUIVALENT(1405, 7, 12,  2026, 10, 4);  // verified elsewhere
+        CHECK_EQUIVALENT(1398, 10, 11, 2020, 1, 1);   // verified elsewhere
     }
 
     // =========================================================================
@@ -130,7 +136,10 @@ int main() {
     // sample range. This catches drift or off-by-one errors in the JDN
     // arithmetic across month and year boundaries.
     {
-        static constexpr int years[] = { 1398, 1400, 1403, 1404, 1405 };
+        static constexpr int years[] = {
+            1300, 1350, 1391, 1394, 1395, 1398, 1400,
+            1403, 1404, 1405, 1420, 1450, 1500, 1600,
+        };
         for (int y : years) {
             for (int m = 1; m <= 12; ++m) {
                 const int dim = persian_month_days(y, m);
@@ -191,9 +200,25 @@ int main() {
     }
 
     // =========================================================================
-    // Persian leap years: 1403 is a leap year, 1404 is not
+    // Persian leap years — reference values
     // =========================================================================
+    // These values are taken directly from the jalaali-js test suite
+    // and the official Iranian calendar. They exercise the era table
+    // across several centuries, including boundaries where the older
+    // 33-year cycle would disagree with the official calendar.
     {
+        // Leap years (jalaali-js: isLeapJalaaliYear → true)
+        CHECK( persian_is_leap(1391));
+        CHECK( persian_is_leap(1395));
+        CHECK( persian_is_leap(1403));
+
+        // Common years
+        CHECK(!persian_is_leap(1394));
+        CHECK(!persian_is_leap(1404));
+
+        // Esfand length matches the leap state
+        CHECK_EQ(persian_month_days(1395, 12), 30);
+        CHECK_EQ(persian_month_days(1394, 12), 29);
         CHECK_EQ(persian_month_days(1403, 12), 30);
         CHECK_EQ(persian_month_days(1404, 12), 29);
     }
@@ -294,6 +319,66 @@ int main() {
     }
 
     // =========================================================================
+    // parse_date: heuristic boundary between Jalali and Gregorian
+    // =========================================================================
+    // parse_date uses a simple heuristic: a year below 1700 is
+    // treated as Jalali, anything else as Gregorian. This means the
+    // algorithm upper bound (MAX_YEAR = 3177, the last year defined
+    // by the jalaali-js era table) is *not* reachable through
+    // parse_date — any year above 1699 is interpreted as Gregorian
+    // before MAX_YEAR is ever consulted. The CLI enforces the Jalali
+    // bound separately for numeric arguments (see main.cpp).
+    //
+    // We assert the actual heuristic boundary here.
+    {
+        const SimpleDate jalali    = parse_date("1699/12/29");
+        const SimpleDate gregorian = parse_date("1700/01/01");
+
+        CHECK( jalali.valid);
+        CHECK( gregorian.valid);
+        CHECK( jalali.jalali);
+        CHECK(!gregorian.jalali);
+
+        CHECK_EQ(jalali.year, 1699);
+        CHECK_EQ(gregorian.year, 1700);
+    }
+
+    // =========================================================================
+    // parse_date: explicit CalendarMode
+    // =========================================================================
+    // An explicit mode overrides the year-based heuristic. This is
+    // what makes it possible to enter a Jalali year above 1699, or to
+    // force a year below 1700 to be read as Gregorian.
+    {
+        // Same string, two interpretations.
+        const SimpleDate as_jalali =
+            parse_date("1405/07/12", CalendarMode::Jalali);
+        const SimpleDate as_gregorian =
+            parse_date("1405/07/12", CalendarMode::Gregorian);
+
+        CHECK(as_jalali.valid);
+        CHECK( as_jalali.jalali);
+
+        CHECK(as_gregorian.valid);
+        CHECK(!as_gregorian.jalali);
+
+        // Auto reproduces the heuristic.
+        CHECK( parse_date("1405/07/12", CalendarMode::Auto).jalali);
+        CHECK(!parse_date("2026-10-04", CalendarMode::Auto).jalali);
+
+        // 1404/12/30 is invalid in the Jalali calendar (1404 is a
+        // common year) but perfectly fine as a Gregorian date.
+        CHECK(!parse_date("1404/12/30", CalendarMode::Jalali).valid);
+        CHECK( parse_date("1404/12/30", CalendarMode::Gregorian).valid);
+
+        // A Jalali year above the heuristic boundary now works.
+        const SimpleDate big = parse_date("3177/01/01", CalendarMode::Jalali);
+        CHECK(big.valid);
+        CHECK(big.jalali);
+        CHECK_EQ(big.year, 3177);
+    }
+
+    // =========================================================================
     // parse_date: out-of-range Gregorian fields
     // =========================================================================
     {
@@ -361,13 +446,16 @@ int main() {
     }
 
     // =========================================================================
-    // leap-year consistency: persian_month_days agrees with JDN
+    // Leap-year consistency across a wide range
     // =========================================================================
-    // For every month of every year in a wide range, the day count
-    // computed by persian_month_days must equal the JDN difference
-    // between the first of the month and the first of the next month.
+    // persian_month_days and persian_to_jdn are derived from the same
+    // jal_cal() lookup, so they must agree on the length of every
+    // month in every year of the supported range.
+    //
+    // This test walks a broad range of years to make sure that the era
+    // table and the month-length logic never drift apart.
     {
-        for (int y = 1300; y <= 1500; ++y) {
+        for (int y = 1200; y <= 2000; ++y) {
             for (int m = 1; m <= 12; ++m) {
                 const long j1 = persian_to_jdn(y, m, 1);
 

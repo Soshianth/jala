@@ -1,8 +1,8 @@
 .\" jala.1 — man page for jala
-.\" Copyright (c) 2026 Alireza
+.\" Copyright (c) 2026 Mahdi Moradi
 .\" SPDX-License-Identifier: MIT
 .\"
-.TH JALA 1 "October 2026" "jala 1.2.0" "User Commands"
+.TH JALA 1 "October 2026" "jala 1.4.0" "User Commands"
 .SH NAME
 jala \- display a Persian (Jalali) calendar in the terminal
 .SH SYNOPSIS
@@ -144,6 +144,29 @@ is set.
 : never emit colors. This is equivalent to the
 .B \-n
 flag.
+.RE
+.TP
+.BR \-\-calendar = WHEN
+Interpret dates passed to
+.B \-c
+and
+.B \-d
+in the calendar named by
+.IR WHEN .
+Valid values are:
+.RS 4
+.IP \(bu 2
+.B auto
+(the default): a year below 1700 is treated as Jalali, anything else
+as Gregorian.
+.IP \(bu 2
+.B jalali
+: always treat the input as Jalali. Use this to enter Jalali years
+above 1699 (e.g.\&
+.BR 3177/01/01 ).
+.IP \(bu 2
+.B gregorian
+: always treat the input as Gregorian.
 .RE
 .TP
 .BR \-n ", " \-\-nocolor
