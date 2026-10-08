@@ -32,13 +32,49 @@ CXXFLAGS    ?= -std=c++17 -O2 -g -Wall -Wextra -I$(SRCDIR)
 LDFLAGS     ?=
 LDLIBS      ?=
 
+# -----------------------------------------------------------------------------
+# Generated files
+# -----------------------------------------------------------------------------
+# These are produced by the Python scripts under scripts/ and are not
+# tracked by git. The Makefile regenerates them whenever the JSON
+# source or the generator itself changes.
+
+GEN_HPP        := $(SRCDIR)/holidays_data.hpp
+GEN_OVERRIDES  := data/overrides.json
+
+JSON_SRC       := data/holidays.json
+JSON_MANUAL    := data/manual_overrides.json
+PY_NEUTRALIZE  := scripts/neutralize_overrides.py
+PY_EMBED       := scripts/embed_holidays.py
+
 # =============================================================================
 # Targets
 # =============================================================================
 
-.PHONY: all clean install uninstall test test-unit debug
+.PHONY: all clean install uninstall test test-unit debug holidays
 
 all: $(TARGET)
+
+# -----------------------------------------------------------------------------
+# Generated data
+# -----------------------------------------------------------------------------
+
+# Regenerate every derived data file by hand (useful after editing
+# the JSON source or the rule tables). Most users do not need to run
+# this; the build rules below invoke the scripts automatically.
+holidays:
+	python3 $(PY_NEUTRALIZE)
+	python3 $(PY_EMBED)
+
+# data/overrides.json is derived from the upstream holiday list and
+# the hand-edited manual overrides.
+$(GEN_OVERRIDES): $(JSON_SRC) $(JSON_MANUAL) $(PY_NEUTRALIZE)
+	python3 $(PY_NEUTRALIZE)
+
+# src/holidays_data.hpp is derived from the upstream holiday list and
+# the overrides produced above.
+$(GEN_HPP): $(JSON_SRC) $(GEN_OVERRIDES) $(PY_EMBED)
+	python3 $(PY_EMBED)
 
 # -----------------------------------------------------------------------------
 # Main binary

@@ -103,6 +103,11 @@ jala_*.deb
 # Object files in src/
 src/*.o
 
+# Auto-generated from data/holidays.json by scripts/embed_holidays.py
+# and scripts/neutralize_overrides.py. Rebuild with `make holidays`.
+src/holidays_data.hpp
+data/overrides.json
+
 # Unit test binary
 tests/jalali_test
 
